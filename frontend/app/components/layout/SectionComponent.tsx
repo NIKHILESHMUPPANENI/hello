@@ -1,6 +1,7 @@
 import React from 'react';
 import Image, { StaticImageData } from 'next/image';
 import { Button } from "@/components/ui/button";
+import Link from 'next/link';
 
 interface SubSection {
     title: string;
@@ -75,7 +76,9 @@ const SectionComponent: React.FC<SectionComponentProps> = ({
                 {/* Button Section */}
                 <div className="flex justify-start">
                     <Button className="w-full sm:w-auto px-8 py-4 text-black bg-white font-medium rounded-lg text-lg shadow-md hover:shadow-lg hover:bg-greyv1">
+                        <Link href="/post-task">
                         {buttonText}
+                        </Link>
                     </Button>
                 </div>
 
