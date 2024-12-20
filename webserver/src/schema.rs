@@ -63,8 +63,8 @@ diesel::table! {
         completed -> Bool,
         user_id -> Nullable<Int4>,
         project_id -> Int4,
-        progress -> Varchar,
         title -> Varchar,
+        progress -> Varchar,
     }
 }
 
