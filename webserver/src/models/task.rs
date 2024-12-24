@@ -152,6 +152,7 @@ impl FromSql<Text, Pg> for Progress {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text)]
+#[serde{rename_all= "lowercase"}]
 pub enum Priority {
     Low,
     Medium,
