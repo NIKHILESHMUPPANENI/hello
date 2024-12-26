@@ -1,14 +1,31 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
+import { Slate, Editable, withReact, RenderElementProps, ReactEditor } from "slate-react";
+import { Transforms, Editor, BaseEditor, createEditor, Descendant, Node } from "slate";
+import { withHistory } from "slate-history";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Navbar } from "../components";
 
+type CustomText = { text: string };
+type CustomElement = { type: "paragraph" | "code" | "align-left" | "align-right" | "bulleted-list" | "numbered-list"; children: CustomText[] };
+
+declare module "slate" {
+  interface CustomTypes {
+    Editor: BaseEditor & ReactEditor;
+    Element: CustomElement;
+    Text: CustomText;
+  }
+}
+
+
 export const FILE_DROP = "Drag & drop your company logo (format: .jpeg, .png). Max 25 MB.";
 export const PAGE_TOP = "FlowerWork will help you to create an announcement for LinkedIn to " +
-          "find the right talent. You can post in both Personal and FlowerWork's " +
-          "LinkedIn accounts.";  
+  "find the right talent. You can post in both Personal and FlowerWork's " +
+  "LinkedIn accounts.";
+
+
 
 // Custom Textarea Component
 const CustomTextarea = ({
@@ -35,28 +52,251 @@ const CustomTextarea = ({
         } rounded-md text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200 ${className}`}
       style={{
         backgroundColor: isFocused ? "#fff" : "#f9f9f9",
-        resize: "none",
+        resize: "vertical",
         boxShadow: isFocused ? "0px 0px 5px rgba(128, 0, 128, 0.2)" : "none",
+        overflow: "auto", // Ensures scrollbar visibility when needed
+        lineHeight: "1.5rem",
       }}
     />
   );
 };
 
+
+
+
+const JobDescriptionSection = () => {
+  const editor = useMemo(() => withHistory(withReact(createEditor())), []);
+  const [value, setValue] = useState<Descendant[]>([
+    {
+      type: "paragraph",
+      children: [{ text: "Describe the job you are trying to outsource" }],
+    },
+  ]);
+  const maxCharacters = 1000;
+
+  const handleTextChange = (newValue: Descendant[]) => {
+    const plainText = newValue.map((node) => Node.string(node)).join("\n");
+    if (plainText.length <= maxCharacters) {
+      setValue(newValue);
+    }
+  };
+
+  const CodeElement = (props: RenderElementProps) => (
+    <pre {...props.attributes}>
+      <code>{props.children}</code>
+    </pre>
+  );
+  
+  const DefaultElement = (props: RenderElementProps) => (
+    <p {...props.attributes}>{props.children}</p>
+  );
+
+  const toggleMark = (editor: any, format: string) => {
+    const isActive = isMarkActive(editor, format);
+    if (isActive) {
+      Editor.removeMark(editor, format);
+    } else {
+      Editor.addMark(editor, format, true);
+    }
+  };
+
+  const isMarkActive = (editor: any, format: string) => {
+    const marks = Editor.marks(editor);
+    return marks ? (marks as Record<string, any>)[format] === true : false;
+  };
+
+  const toggleBlock = (editor: Editor, format: string) => {
+    const isActive = isBlockActive(editor, format);
+    Transforms.setNodes(
+      editor,
+      { type: isActive ? "paragraph" : format as CustomElement['type'] },
+      { match: (n: Node) => Editor.isBlock(editor, n) }
+    );
+  };
+
+  const isBlockActive = (editor: Editor, format: string) => {
+    const [match] = Editor.nodes(editor, {
+      match: (n: Node) =>
+        Editor.isBlock(editor, n) && isCustomElement(n) && n.type === format,
+    });
+    return !!match;
+  };
+
+  type CustomElement = {
+    type: "paragraph" | "code" | "align-left" | "align-right" | "bulleted-list" | "numbered-list";
+    children: CustomText[];
+  };
+  
+  const isCustomElement = (node: Node): node is CustomElement => {
+    return typeof (node as CustomElement).type === "string";
+  };
+  
+  
+  
+  
+
+  const renderElement = useCallback((props: RenderElementProps) => {
+    switch (props.element.type) {
+      case "code":
+        return <CodeElement {...props} />;
+      default:
+        return <DefaultElement {...props} />;
+    }
+  }, []);
+
+
+  return (
+    <div className="mb-6">
+      <label className="block text-sm font-bold text-gray-700 mb-2">
+        Job description <span className="text-red-500">*</span>
+      </label>
+      <div className="border border-gray-300 rounded-md bg-white p-4">
+        <Slate editor={editor} initialValue={value} onChange={handleTextChange}>
+          {/* Full Toolbar */}
+          <div className="flex flex-wrap gap-2 mb-2 border-b pb-2">
+            {/* Text Formatting */}
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                toggleMark(editor, "bold");
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+            >
+              B
+            </button>
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                toggleMark(editor, "italic");
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+            >
+              I
+            </button>
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                toggleMark(editor, "underline");
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+            >
+              U
+            </button>
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                toggleMark(editor, "strikethrough");
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+            >
+              S
+            </button>
+
+            {/* Text Alignment */}
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                toggleBlock(editor, "align-left");
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+            >
+              Align Left
+            </button>
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                toggleBlock(editor, "align-center");
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+            >
+              Align Center
+            </button>
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                toggleBlock(editor, "align-right");
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+            >
+              Align Right
+            </button>
+
+            {/* Lists */}
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                toggleBlock(editor, "bulleted-list");
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+            >
+              Bulleted List
+            </button>
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                toggleBlock(editor, "numbered-list");
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+            >
+              Numbered List
+            </button>
+
+            {/* Link */}
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                const url = prompt("Enter the URL:");
+                if (url) {
+                  Editor.addMark(editor, "link", url);
+                }
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+            >
+              Link
+            </button>
+          </div>
+
+          {/* Editable Content */}
+          <Editable
+            renderElement={renderElement}
+            placeholder="Describe the job you are trying to outsource"
+            className="min-h-[200px] text-gray-700"
+          />
+
+          {/* Bottom Toolbar */}
+          <div className="flex flex-wrap gap-2 mt-2 border-t pt-2">
+            {/* Additional Symbols */}
+            <button className="p-2 hover:bg-gray-200 rounded">Image</button>
+            <button className="p-2 hover:bg-gray-200 rounded">Microphone</button>
+            <button className="p-2 hover:bg-gray-200 rounded">Code Block</button>
+            <button className="p-2 hover:bg-gray-200 rounded">Video</button>
+          </div>
+        </Slate>
+      </div>
+
+
+      
+      {/* Character Counter */}
+      <div className="flex justify-between mt-2">
+      <span className="text-gray-500 text-sm">
+          {maxCharacters - value.reduce((acc, node) => acc + Node.string(node).length, 0)} characters left
+        </span>
+      </div>
+      <p className="text-sm text-gray-500 mt-2">
+        The more detail you provide, the better we can help you find the right person.
+      </p>
+    </div>
+  );
+};
+
+
+
+
 const PostTask = () => {
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [skills, setSkills] = useState<string[]>(["UX/UI", "Illustration", "HTML", "Web design"]);
+  const [experienceRequirements, setExperienceRequirements] = useState<string[]>(["UX/UI", "Illustration", "HTML"]);
 
-  const [skills, setSkills] = useState<string[]>([
-    "UX/UI",
-    "Illustration",
-    "HTML",
-    "Web design",
-  ]);
-  const [experienceRequirements, setExperienceRequirements] = useState<string[]>([
-    "UX/UI",
-    "Illustration",
-    "HTML",
-  ]);
-  const [contactMethods, setContactMethods] = useState<string[]>([""]);
 
   const addSkill = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && e.currentTarget.value.trim()) {
@@ -64,6 +304,7 @@ const PostTask = () => {
       e.currentTarget.value = "";
     }
   };
+
 
   const removeSkill = (index: number) => {
     setSkills(skills.filter((_, i) => i !== index));
@@ -127,6 +368,7 @@ const PostTask = () => {
           <CustomTextarea
             placeholder="Edit the title of the task here"
             rows={2}
+            className="border-gray-300 rounded-md"
           />
         </div>
 
@@ -135,13 +377,16 @@ const PostTask = () => {
           <label className="block text-sm font-bold text-gray-700 mb-2">
             Title of your company
           </label>
-          <Input placeholder="Type your company name here" className="w-full" />
+          <CustomTextarea
+            placeholder="Type your company name here"
+            rows={2}
+            className="border-gray-300 rounded-md" />
         </div>
 
         {/* Logo Upload */}
 
         <div className="flex flex-col">
-          <label className="block mb-2 text-sm text-white">Company logo file</label>
+          <label className="lock text-sm font-bold text-gray-700 mb-2">Company logo file</label>
           <div
             onDrop={(e) => handleDrop(e, setLogoFile)}
             onDragOver={handleDragOver}
@@ -206,19 +451,8 @@ const PostTask = () => {
         </div>
 
         {/* Job Description */}
-        <div className="mb-6">
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            Job description
-          </label>
-          <CustomTextarea
-            placeholder="Describe the job you are trying to outsource"
-            rows={5}
-          />
-          <p className="text-sm text-gray-500 mt-2">
-            The more detail you provide, the better we can help you find the
-            right person.
-          </p>
-        </div>
+        <JobDescriptionSection />
+
 
         {/* Skills Section */}
         <div className="mb-6">
