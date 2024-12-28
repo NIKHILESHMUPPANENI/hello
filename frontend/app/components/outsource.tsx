@@ -7,6 +7,7 @@ import { withHistory } from "slate-history";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Navbar } from "../components";
+import CustomInput from "@/components/ui/custom-input";
 
 type CustomText = { text: string };
 type CustomElement = { type: "paragraph" | "code" | "align-left" | "align-center" | "align-right" | "bulleted-list" | "numbered-list"; children: CustomText[] };
@@ -532,6 +533,7 @@ const PostTask = () => {
     if (value.trim() && skills.length < maxSkills) {
       setSkills([...skills, value.trim()]); // Add skill
       setShowModal(false); // Hide modal
+      setExperienceRequirements([...experienceRequirements, ""]); // Add an empty requirement
     }
   };
 
@@ -554,23 +556,9 @@ const PostTask = () => {
   // Remove skill
   const removeSkill = (index: number) => {
     setSkills(skills.filter((_, i) => i !== index)); // Remove skill
+    setExperienceRequirements(experienceRequirements.filter((_, i) => i !== index));
   };
 
-  const addExperienceRequirement = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && e.currentTarget.value.trim()) {
-      setExperienceRequirements([
-        ...experienceRequirements,
-        e.currentTarget.value.trim(),
-      ]);
-      e.currentTarget.value = "";
-    }
-  };
-
-  const removeExperienceRequirement = (index: number) => {
-    setExperienceRequirements(
-      experienceRequirements.filter((_, i) => i !== index)
-    );
-  };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -636,7 +624,7 @@ const PostTask = () => {
           <div
             onDrop={(e) => handleDrop(e, setLogoFile)}
             onDragOver={handleDragOver}
-            className="p-4 border border-gray-400 rounded-md bg-white text-black flex flex-row items-center"
+            className="p-4 border border-gray-400 gap-2 rounded-md bg-white text-black flex flex-row items-center"
           >
             <Input
               type="file"
@@ -681,7 +669,7 @@ const PostTask = () => {
               </svg>
               <span>Attach a file</span>
             </Button>
-            <p className="mt-2 text-gray-500 text-sm text-center">{FILE_DROP}</p>
+            <p className="flex items-center justify-center transition">{FILE_DROP}</p>
           </div>
           {logoFile && (
             <div className="mt-2 flex items-center justify-between">
@@ -702,93 +690,93 @@ const PostTask = () => {
 
         {/* Skills Section */}
         <div className="mb-6">
-      <label className="block text-sm font-bold text-gray-700 mb-2">
-        What skills are required? <span className="text-red-500">*</span>
-      </label>
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            What skills are required? <span className="text-red-500">*</span>
+          </label>
 
-      {/* Skills Display */}
-      <div className="flex flex-wrap gap-2 border rounded-md p-3">
-        {skills.map((skill, index) => (
-          <span
-            key={index}
-            className="bg-gray-200 text-sm rounded-full px-3 py-1 flex items-center space-x-2"
-          >
-            {skill}
-            <button
-              onClick={() => removeSkill(index)}
-              className="text-red-500 hover:text-red-700 ml-2"
-            >
-              ✕
-            </button>
-          </span>
-        ))}
-      </div>
-
-      {/* Counter */}
-      <p className="text-sm text-gray-500 mt-1">
-        {skills.length}/{maxSkills} selected
-      </p>
-
-      {/* Add Skills Button */}
-      <button
-        onClick={() => setShowModal(true)}
-        className="mt-2 flex items-center gap-2 text-black-500 hover:text-black-700 transition border border-black-500 px-4 py-2 rounded-full shadow hover:shadow-md"
-
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-        Add skills
-      </button>
-
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
-          <div
-            className="bg-white rounded-md shadow-lg w-96 p-6 animate-modal"
-            style={{
-              animation: "fadeInScale 0.3s ease-in-out", // Add animation
-            }}
-          >
-            <h2 className="text-lg font-bold mb-4">Add a skill</h2>
-            <input
-              type="text"
-              ref={inputRef}
-              className="w-full p-2 border border-gray-300 rounded-md mb-4"
-              placeholder="Type a skill and press Enter"
-              onKeyDown={handleKeyDown}
-              autoFocus
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowModal(false)}
-                className="mt-2 bg-gray-200 flex items-center gap-2 text-gray-500 hover:text-gray-700 transition border border-black-500 px-4 py-2 rounded-full shadow hover:shadow-md"
+          {/* Skills Display */}
+          <div className="flex flex-wrap gap-2 border rounded-md p-3">
+            {skills.map((skill, index) => (
+              <span
+                key={index}
+                className="bg-gray-200 text-sm rounded-full px-3 py-1 flex items-center space-x-2"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleChooseClick}
-                className="mt-2 flex items-center gap-2 text-purple-500 hover:text-purple-700 transition border border-purple-500 px-4 py-2 rounded-full shadow hover:shadow-md"
-              >
-                choose
-              </button>
-            </div>
+                {skill}
+                <button
+                  onClick={() => removeSkill(index)}
+                  className="text-red-500 hover:text-red-700 ml-2"
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
           </div>
-        </div>
-      )}
 
-      {/* Animation Keyframes */}
-      <style jsx>{`
+          {/* Counter */}
+          <p className="text-sm text-gray-500 mt-1">
+            {skills.length}/{maxSkills} selected
+          </p>
+
+          {/* Add Skills Button */}
+          <button
+            onClick={() => setShowModal(true)}
+            className="mt-2 flex items-center gap-2 text-black-500 hover:text-black-700 transition border border-black-500 px-4 py-2 rounded-full shadow hover:shadow-md"
+
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-5 h-5"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add skills
+          </button>
+
+          {/* Modal */}
+          {showModal && (
+            <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
+              <div
+                className="bg-white rounded-md shadow-lg w-96 p-6 animate-modal"
+                style={{
+                  animation: "fadeInScale 0.3s ease-in-out", // Add animation
+                }}
+              >
+                <h2 className="text-lg font-bold mb-4">Add a skill</h2>
+                <input
+                  type="text"
+                  ref={inputRef}
+                  className="w-full p-2 border border-gray-300 rounded-md mb-4"
+                  placeholder="Type a skill and press Enter"
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="mt-2 bg-gray-200 flex items-center gap-2 text-gray-500 hover:text-gray-700 transition border border-black-500 px-4 py-2 rounded-full shadow hover:shadow-md"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleChooseClick}
+                    className="mt-2 flex items-center gap-2 text-purple-500 hover:text-purple-700 transition border border-purple-500 px-4 py-2 rounded-full shadow hover:shadow-md"
+                  >
+                    choose
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Animation Keyframes */}
+          <style jsx>{`
         @keyframes fadeInScale {
           0% {
             opacity: 0;
@@ -800,45 +788,50 @@ const PostTask = () => {
           }
         }
       `}</style>
-    </div>
+        </div>
 
 
-        {/* Experience Requirements */}
+        {/* Preferred Years of Experience Section */}
         <div className="mb-6">
           <label className="block text-sm font-bold text-gray-700 mb-2">
-            Preferred years of experience, requirements
+            Preferred years of experience, requirements <span className="text-red-500">*</span>
           </label>
-          <div className="flex flex-wrap gap-2">
-            {experienceRequirements.map((requirement, index) => (
-              <span
-                key={index}
-                className="bg-gray-200 text-sm rounded-full px-3 py-1 flex items-center space-x-2"
-              >
-                {requirement}
-                <button
-                  onClick={() => removeExperienceRequirement(index)}
-                  className="text-red-500 hover:text-red-700 ml-2"
+          <div className="space-y-2">
+            {skills.map((skill, index) => (
+              <div key={index} className="flex items-center gap-4">
+                {/* Skill Name */}
+                <span className="font-medium text-gray-700">{skill}</span>
+                {/* Dropdown for Years of Experience */}
+                <select
+                  className="border border-gray-300 rounded-md p-2 text-gray-700"
+                  onChange={(e) => {
+                    // Update the experience requirements
+                    const updatedExperience = [...experienceRequirements];
+                    updatedExperience[index] = e.target.value;
+                    setExperienceRequirements(updatedExperience);
+                  }}
                 >
-                  ✕
-                </button>
-              </span>
+                  <option value="" disabled selected>
+                    Select years of experience
+                  </option>
+                  <option value="1-2">1-2 years</option>
+                  <option value="3-5">3-5 years</option>
+                  <option value="5+">5+ years</option>
+                </select>
+              </div>
             ))}
           </div>
-          <Input
-            placeholder="Add requirements and press Enter"
-            className="mt-2"
-            onKeyDown={addExperienceRequirement}
-          />
         </div>
+
 
         {/* Contact Information */}
         <div className="mb-6">
           <label className="block text-sm font-bold text-gray-700 mb-2">
             Contact information
           </label>
-          <Input placeholder="Enter contact email" className="mb-2" />
-          <Input placeholder="Enter contact phone number" className="mb-2" />
-          <Input placeholder="Company website URL" className="mb-2" />
+          <CustomInput type="email" placeholder="Enter contact email" className="mb-2" />
+          <CustomInput type="tel" placeholder="Enter contact phone number" className="mb-2" />
+          <CustomInput type="url" placeholder="Company website URL" className="mb-2" />
           <Button variant="outline" className="mt-2 text-sm">
             + Add another contact method
           </Button>
