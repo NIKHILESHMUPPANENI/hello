@@ -28,42 +28,6 @@ export const PAGE_TOP = "FlowerWork will help you to create an announcement for 
 
 
 
-// Custom Textarea Component
-const CustomTextarea = ({
-  placeholder,
-  rows = 4,
-  className = "",
-}: {
-  placeholder: string;
-  rows?: number;
-  className?: string;
-}) => {
-  const [isFocused, setIsFocused] = useState(false);
-  const [value, setValue] = useState("");
-
-  return (
-    <textarea
-      rows={rows}
-      value={value}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      onChange={(e) => setValue(e.target.value)}
-      placeholder={placeholder}
-      className={`w-full p-3 border ${isFocused ? "border-purple-500" : "border-gray-300"
-        } rounded-md text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200 ${className}`}
-      style={{
-        backgroundColor: isFocused ? "#fff" : "#f9f9f9",
-        resize: "vertical",
-        boxShadow: isFocused ? "0px 0px 5px rgba(128, 0, 128, 0.2)" : "none",
-        overflow: "auto", // Ensures scrollbar visibility when needed
-        lineHeight: "1.5rem",
-      }}
-    />
-  );
-};
-
-
-
 
 const JobDescriptionSection = () => {
   const editor = useMemo(() => withHistory(withReact(createEditor())), []);
@@ -596,12 +560,11 @@ const PostTask = () => {
         {/* Edit Title */}
         <div className="mb-6">
           <label className="block text-sm font-bold text-gray-700 mb-2">
-            Edit title of outsourced task (Current title: "Design a logo for a
-            bakery")
+            Edit title of outsourced task (Current title: "Design a logo for a bakery")
           </label>
-          <CustomTextarea
+          <CustomInput
             placeholder="Edit the title of the task here"
-            rows={2}
+            rows={2} // Multi-line input
             className="border-gray-300 rounded-md"
           />
         </div>
@@ -611,10 +574,11 @@ const PostTask = () => {
           <label className="block text-sm font-bold text-gray-700 mb-2">
             Title of your company
           </label>
-          <CustomTextarea
+          <CustomInput
             placeholder="Type your company name here"
-            rows={2}
-            className="border-gray-300 rounded-md" />
+            rows={2} // Multi-line input
+            className="border-gray-300 rounded-md"
+          />
         </div>
 
         {/* Logo Upload */}
@@ -832,16 +796,64 @@ const PostTask = () => {
           <CustomInput type="email" placeholder="Enter contact email" className="mb-2" />
           <CustomInput type="tel" placeholder="Enter contact phone number" className="mb-2" />
           <CustomInput type="url" placeholder="Company website URL" className="mb-2" />
-          <Button variant="outline" className="mt-2 text-sm">
-            + Add another contact method
+          <Button
+            variant="outline"
+            className="mt-2 text-sm flex items-center justify-center border border-gray-500 text-gray-700 px-4 py-2 rounded-full shadow-sm hover:bg-gray-100 transition"
+          >
+            <span className="flex items-center gap-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add other contact method
+            </span>
           </Button>
         </div>
 
         {/* Buttons */}
-        <div className="flex justify-end gap-4 mt-6">
-          <Button variant="outline">Save post as draft</Button>
-          <Button className="bg-purple-500 hover:bg-purple-600 text-white">
+        <div className="flex justify-start gap-4 mt-6">
+          {/* Preview Post Button */}
+          <Button className="bg-purple-500 hover:bg-purple-600 text-white flex items-center gap-2 px-4 py-2 rounded-md">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-5 h-5"
+            >
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
             Preview Post
+          </Button>
+
+          {/* Save Post as Draft Button */}
+          <Button variant="outline" className="flex items-center gap-2 px-4 py-2 rounded-md border border-gray-500 text-gray-700">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-5 h-5"
+            >
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+            </svg>
+            Save post as draft
           </Button>
         </div>
       </div>

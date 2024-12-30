@@ -6,26 +6,21 @@ const CustomInput = ({
   placeholder,
   type = "text",
   className,
+  rows,
 }: {
   placeholder: string;
   type?: string;
   className?: string;
+  rows?: number; // Optional rows prop for multi-line input
 }) => {
   const [isFocused, setIsFocused] = useState(false);
-  const [value, setValue] = useState(""); // Track the input's value
+  const [value, setValue] = useState("");
 
-  const handleFocus = () => {
-    setIsFocused(true);
+  const handleFocus = () => setIsFocused(true);
+  const handleBlur = () => setIsFocused(false);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setValue(e.target.value);
   };
-
-  const handleBlur = () => {
-    setIsFocused(false);
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setValue(e.target.value); // Update value on input
-  };
-
   const getBackgroundColor = () => {
     if (isFocused) return "#FFFFFF"; // Active background
     if (!isFocused && value.trim() !== "") return "#FFFFFF"; // Filled background
@@ -39,14 +34,39 @@ const CustomInput = ({
     return "#B055CC"; // Hover and click border
   };
 
+  if (rows) {
+    return (
+      <textarea
+        placeholder={placeholder}
+        rows={rows}
+        value={value}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onChange={handleChange}
+        style={{
+          backgroundColor: getBackgroundColor(),
+          border: `1.5px solid ${getBorderColor()}`,
+          borderRadius: "8px",
+          padding: "10px 15px",
+          width: "100%",
+          outline: "none",
+          color: "black",
+          transition: "background-color 0.3s ease, border-color 0.3s ease",
+          resize: "vertical",
+        }}
+        className={className}
+      />
+    );
+  }
+
   return (
     <input
       type={type}
       placeholder={placeholder}
+      value={value}
       onFocus={handleFocus}
       onBlur={handleBlur}
       onChange={handleChange}
-      value={value}
       style={{
         backgroundColor: getBackgroundColor(),
         border: `1.5px solid ${getBorderColor()}`,
