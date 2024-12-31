@@ -17,24 +17,76 @@ declare module "slate" {
   }
 }
 
-
+const PLACEHOLDER_TEXT = "Describe the job you are trying to outsource";
 
 const JobDescriptionSection = () => {
   const editor = useMemo(() => withHistory(withReact(createEditor())), []);
   const [value, setValue] = useState<Descendant[]>([
     {
       type: "paragraph",
-      children: [{ text: "Describe the job you are trying to outsource" }],
+      children: [{ text: "" }],
     },
   ]);
+
+  const [isPlaceholderVisible, setIsPlaceholderVisible] = useState(true);
 
   const maxCharacters = 1000;
 
   const handleTextChange = (newValue: Descendant[]) => {
     const plainText = newValue.map((node) => Node.string(node)).join("\n");
-    if (plainText.trim() !== "Describe the job you are trying to outsource" && plainText.length <= maxCharacters) {
-      setValue(newValue);
+    
+    // Check if the content is empty or just whitespace
+    if (plainText.trim() === "") {
+      setIsPlaceholderVisible(true);
+      setValue([{ type: "paragraph", children: [{ text: "" }] }]);
+      return;
     }
+  
+    // If within character limit, update normally
+    if (plainText.length <= maxCharacters) {
+      setIsPlaceholderVisible(false);
+      setValue(newValue);
+      return;
+    }
+  
+    // If we're over the limit, prevent the change
+    const currentText = value.map((node) => Node.string(node)).join("\n");
+    if (currentText.length >= maxCharacters) {
+      // Don't update if we're already at or over the limit
+      return;
+    }
+  
+    // If this is a new change that would exceed the limit,
+    // keep the current value
+    setValue(value);
+  };
+  
+  // Add this function to handle keyboard events
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const currentLength = value.reduce((acc, node) => acc + Node.string(node).length, 0);
+    
+    // Allow deletion and navigation keys
+    if (
+      event.key === 'Backspace' ||
+      event.key === 'Delete' ||
+      event.key === 'ArrowLeft' ||
+      event.key === 'ArrowRight' ||
+      event.key === 'ArrowUp' ||
+      event.key === 'ArrowDown' ||
+      event.metaKey ||
+      event.ctrlKey
+    ) {
+      return;
+    }
+
+    // Prevent typing if at character limit
+    if (currentLength >= maxCharacters) {
+      event.preventDefault();
+    }
+  }, [value, maxCharacters]);  // Add dependencies
+
+  const getRemainingCharacters = (maxCharacters: number, value: Descendant[]): number => {
+    return maxCharacters - value.reduce((acc: number, node: Descendant) => acc + Node.string(node).length, 0);
   };
 
 
@@ -349,36 +401,29 @@ const JobDescriptionSection = () => {
           </div>
 
           {/* Editable Content */}
-          <Editable
-            renderElement={renderElement}
-            placeholder={
-              value.length === 1 && Node.string(value[0]) === "" ? "Describe the job you are trying to outsource" : ""
-            }
-            className="min-h-[200px] text-gray-700"
-            onFocus={() => {
-              // Check if the content is just the placeholder and ensure it exists
-              if (
-                value.length > 0 &&
-                value.length === 1 &&
-                Node.string(value[0]) === "Describe the job you are trying to outsource"
-              ) {
-                Transforms.select(editor, Editor.start(editor, [])); // Safely select the editor start
-                Transforms.delete(editor, {
-                  at: Editor.start(editor, []), // Use the safe editor start
-                });
-              }
-            }}
-            onBlur={() => {
-              // Restore placeholder if the content becomes empty
-              if (!value.length || Node.string(value[0]) === "") {
-                Transforms.insertNodes(editor, {
-                  type: "paragraph",
-                  children: [{ text: "Describe the job you are trying to outsource" }],
-                });
-              }
-            }}
-          />
-
+          <div className="relative">
+            {isPlaceholderVisible && (
+              <div className="absolute top-0 left-0 text-gray-400 pointer-events-none p-[1px]">
+                {PLACEHOLDER_TEXT}
+              </div>
+            )}
+            <Editable
+              renderElement={renderElement}
+              className="min-h-[200px] text-gray-700"
+              onKeyDown={handleKeyDown}  // Make sure this line is included
+              onFocus={() => {
+                if (isPlaceholderVisible) {
+                  setIsPlaceholderVisible(false);
+                }
+              }}
+              onBlur={() => {
+                const plainText = value.map((node) => Node.string(node)).join("\n");
+                if (plainText.trim() === "") {
+                  setIsPlaceholderVisible(true);
+                }
+              }}
+            />
+          </div>
 
 
 
@@ -491,7 +536,7 @@ const JobDescriptionSection = () => {
       {/* Character Counter */}
       <div className="flex justify-between mt-2">
         <span className="text-gray-500 text-sm">
-          {maxCharacters - value.reduce((acc, node) => acc + Node.string(node).length, 0)} characters left
+        {getRemainingCharacters(maxCharacters, value)} characters left
         </span>
       </div>
       <p className="text-sm text-gray-500 mt-2">

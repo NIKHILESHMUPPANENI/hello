@@ -341,12 +341,12 @@ const PostTask = () => {
               type="email"
               placeholder="Enter contact email"
               className="w-full p-2 text-sm border-gray-300 rounded-md"
-            />
+            /> <span className="text-red-500">*</span>
             <CustomInput
               type="tel"
               placeholder="Enter contact phone number"
               className="w-full p-2 text-sm border-gray-300 rounded-md"
-            />
+            /> <span className="text-red-500">*</span>
             <CustomInput
               type="url"
               placeholder="Company website URL"
