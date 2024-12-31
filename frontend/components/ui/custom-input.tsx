@@ -5,7 +5,7 @@ import React, { useState } from "react";
 const CustomInput = ({
   placeholder,
   type = "text",
-  className,
+  className = "",
   rows,
 }: {
   placeholder: string;
@@ -21,6 +21,7 @@ const CustomInput = ({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setValue(e.target.value);
   };
+
   const getBackgroundColor = () => {
     if (isFocused) return "#FFFFFF"; // Active background
     if (!isFocused && value.trim() !== "") return "#FFFFFF"; // Filled background
@@ -34,6 +35,16 @@ const CustomInput = ({
     return "#B055CC"; // Hover and click border
   };
 
+  const baseStyles = {
+    backgroundColor: getBackgroundColor(),
+    border: `1.5px solid ${getBorderColor()}`,
+    borderRadius: "8px",
+    padding: "10px 15px",
+    outline: "none",
+    color: "black",
+    transition: "background-color 0.3s ease, border-color 0.3s ease",
+  };
+
   if (rows) {
     return (
       <textarea
@@ -43,18 +54,8 @@ const CustomInput = ({
         onFocus={handleFocus}
         onBlur={handleBlur}
         onChange={handleChange}
-        style={{
-          backgroundColor: getBackgroundColor(),
-          border: `1.5px solid ${getBorderColor()}`,
-          borderRadius: "8px",
-          padding: "10px 15px",
-          width: "100%",
-          outline: "none",
-          color: "black",
-          transition: "background-color 0.3s ease, border-color 0.3s ease",
-          resize: "vertical",
-        }}
-        className={className}
+        style={baseStyles} // Inline styles
+        className={`resize-vertical w-full ${className}`} // External styles
       />
     );
   }
@@ -67,17 +68,8 @@ const CustomInput = ({
       onFocus={handleFocus}
       onBlur={handleBlur}
       onChange={handleChange}
-      style={{
-        backgroundColor: getBackgroundColor(),
-        border: `1.5px solid ${getBorderColor()}`,
-        borderRadius: "8px",
-        padding: "10px 15px",
-        width: "100%",
-        outline: "none",
-        color: "black",
-        transition: "background-color 0.3s ease, border-color 0.3s ease",
-      }}
-      className={className}
+      style={baseStyles} // Inline styles
+      className={`w-full ${className}`} // External styles
     />
   );
 };
