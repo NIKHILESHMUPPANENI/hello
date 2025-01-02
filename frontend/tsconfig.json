@@ -8,6 +8,8 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "noImplicitAny": true,
+    "types": ["@types/react", "@types/node"],
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",

@@ -339,14 +339,16 @@ const PostTask = () => {
           <div className="flex flex-col gap-4"> {/* Stack inputs vertically */}
             <CustomInput
               type="email"
-              placeholder="Enter contact email"
+              placeholder="Enter contact email *"
               className="w-full p-2 text-sm border-gray-300 rounded-md"
-            /> <span className="text-red-500">*</span>
+              required
+            /> 
             <CustomInput
               type="tel"
-              placeholder="Enter contact phone number"
+              placeholder="Enter contact phone number *"
               className="w-full p-2 text-sm border-gray-300 rounded-md"
-            /> <span className="text-red-500">*</span>
+              required
+            /> 
             <CustomInput
               type="url"
               placeholder="Company website URL"

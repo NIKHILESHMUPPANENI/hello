@@ -1,17 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 const CustomInput = ({
   placeholder,
   type = "text",
   className = "",
   rows,
+  required = false,
 }: {
   placeholder: string;
   type?: string;
   className?: string;
   rows?: number; // Optional rows prop for multi-line input
+  required?: boolean; // Optional required prop
 }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [value, setValue] = useState("");
@@ -45,6 +47,11 @@ const CustomInput = ({
     transition: "background-color 0.3s ease, border-color 0.3s ease",
   };
 
+  useEffect(() => {
+    // Ensure consistent initial state between server and client
+    setValue(value);
+  }, []);
+
   if (rows) {
     return (
       <textarea
@@ -56,6 +63,7 @@ const CustomInput = ({
         onChange={handleChange}
         style={baseStyles} // Inline styles
         className={`resize-vertical w-full ${className}`} // External styles
+        required={required}
       />
     );
   }
@@ -70,6 +78,7 @@ const CustomInput = ({
       onChange={handleChange}
       style={baseStyles} // Inline styles
       className={`w-full ${className}`} // External styles
+      required={required}
     />
   );
 };

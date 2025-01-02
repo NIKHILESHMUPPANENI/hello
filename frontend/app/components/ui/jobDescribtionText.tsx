@@ -1,12 +1,15 @@
 "use client";
 
 import React, { useMemo, useState, useCallback } from "react";
+import Icon from '@mdi/react';
+import { mdiFormatLetterCase, mdiFormatBold } from '@mdi/js';
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { Slate, Editable, withReact, RenderElementProps, ReactEditor } from "slate-react";
 import { Element, Transforms, Editor, BaseEditor, createEditor, Descendant, Node } from "slate";
 import { withHistory } from "slate-history";
 
 
-type CustomText = { text: string };
+type CustomText = { text: string; bold?: boolean; uppercase?: boolean; italic?: boolean };
 type CustomElement = { type: "paragraph" | "code" | "align-left" | "align-center" | "align-right" | "bulleted-list" | "numbered-list"; children: CustomText[] };
 
 declare module "slate" {
@@ -34,37 +37,37 @@ const JobDescriptionSection = () => {
 
   const handleTextChange = (newValue: Descendant[]) => {
     const plainText = newValue.map((node) => Node.string(node)).join("\n");
-    
+
     // Check if the content is empty or just whitespace
     if (plainText.trim() === "") {
       setIsPlaceholderVisible(true);
       setValue([{ type: "paragraph", children: [{ text: "" }] }]);
       return;
     }
-  
+
     // If within character limit, update normally
     if (plainText.length <= maxCharacters) {
       setIsPlaceholderVisible(false);
       setValue(newValue);
       return;
     }
-  
+
     // If we're over the limit, prevent the change
     const currentText = value.map((node) => Node.string(node)).join("\n");
     if (currentText.length >= maxCharacters) {
       // Don't update if we're already at or over the limit
       return;
     }
-  
+
     // If this is a new change that would exceed the limit,
     // keep the current value
     setValue(value);
   };
-  
+
   // Add this function to handle keyboard events
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     const currentLength = value.reduce((acc, node) => acc + Node.string(node).length, 0);
-    
+
     // Allow deletion and navigation keys
     if (
       event.key === 'Backspace' ||
@@ -130,6 +133,15 @@ const JobDescriptionSection = () => {
     );
   };
 
+  const toggleUppercase = (editor: Editor) => {
+    const isActive = isMarkActive(editor, "uppercase");
+    if (isActive) {
+      Editor.removeMark(editor, "uppercase");
+    } else {
+      Editor.addMark(editor, "uppercase", true);
+    }
+  };
+
 
 
 
@@ -144,8 +156,38 @@ const JobDescriptionSection = () => {
   };
 
 
+  const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false); // Toggle Emoji Picker
 
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    Transforms.insertText(editor, emojiData.emoji); // Insert emoji at cursor position
+    setIsEmojiPickerVisible(false); // Close picker after selection
+  };
 
+  interface RenderLeafProps {
+    attributes: any;
+    children: any;
+    leaf: {
+      bold?: boolean;
+      uppercase?: boolean;
+      italic?: boolean;
+    };
+  }
+
+  const renderLeaf = useCallback((props: RenderLeafProps) => {
+    let { children } = props;
+
+    if (props.leaf.bold) {
+      children = <strong>{children}</strong>;
+    }
+    if (props.leaf.uppercase) {
+      children = <span style={{ textTransform: "uppercase" }}>{children}</span>;
+    }
+    if (props.leaf.italic) {
+      children = <em>{children}</em>;
+    }
+
+    return <span {...props.attributes}>{children}</span>;
+  }, []);
 
 
   const renderElement = useCallback((props: RenderElementProps) => {
@@ -159,36 +201,39 @@ const JobDescriptionSection = () => {
 
 
   return (
-    <div className="mb-6">
+    <div className="mb-6 relative">
       <label className="block text-sm font-bold text-gray-700 mb-3">
         Job description <span className="text-red-500">*</span>
       </label>
-      <div className="border border-gray-300 rounded-md bg-white p-4">
+      <div className="border border-gray-300 rounded-3xl bg-white p-4 ">
         <Slate editor={editor} initialValue={value} onChange={handleTextChange}>
           {/* Full Toolbar */}
           <div className="flex flex-wrap gap-2 mb-2 border-b pb-2">
             {/* Text Formatting */}
+
+            {/* Uppercase */}
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                toggleUppercase(editor);
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+              title="Uppercase"
+            >
+              <Icon path={mdiFormatLetterCase} size={1} />
+            </button>
+
             {/* Bold */}
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
-                toggleMark(editor, "bold");
+                toggleMark(editor, 'bold');
+                console.log('Bold toggled');
               }}
               className="p-2 hover:bg-gray-200 rounded"
               title="Bold"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <path d="M6 4h9a4 4 0 0 1 0 8H6zm0 8h9a4 4 0 0 1 0 8H6z" />
-              </svg>
+              <Icon path={mdiFormatBold} size={1} />
             </button>
 
             {/* Italic */}
@@ -239,14 +284,49 @@ const JobDescriptionSection = () => {
               </svg>
             </button>
 
-            {/* Align Left */}
+
+            {/* Add Emoji */}
+            <div className="relative">
+              <button
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setIsEmojiPickerVisible((prev) => !prev); // Toggle picker visibility
+                }}
+                className="p-2 hover:bg-gray-200 rounded"
+                title="Add Emoji"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-5 h-5"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                  <line x1="9" y1="9" x2="9.01" y2="9" />
+                  <line x1="15" y1="9" x2="15.01" y2="9" />
+                </svg>
+              </button>
+              {isEmojiPickerVisible && (
+                <div className="absolute z-50 top-full left-0 mt-2 bg-white shadow-lg rounded-md p-2">
+                  <EmojiPicker onEmojiClick={handleEmojiClick} />
+                </div>
+              )}
+            </div>
+
+
+            {/* Align Right */}
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
-                toggleBlock(editor, "align-left");
+                toggleBlock(editor, "align-right");
               }}
               className="p-2 hover:bg-gray-200 rounded"
-              title="Align Left"
+              title="Align Right"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -258,10 +338,10 @@ const JobDescriptionSection = () => {
                 strokeLinejoin="round"
                 className="w-5 h-5"
               >
-                <line x1="21" y1="10" x2="7" y2="10" />
+                <line x1="17" y1="10" x2="3" y2="10" />
                 <line x1="21" y1="6" x2="3" y2="6" />
                 <line x1="21" y1="14" x2="3" y2="14" />
-                <line x1="21" y1="18" x2="7" y2="18" />
+                <line x1="17" y1="18" x2="3" y2="18" />
               </svg>
             </button>
 
@@ -291,14 +371,15 @@ const JobDescriptionSection = () => {
               </svg>
             </button>
 
-            {/* Align Right */}
+
+            {/* Align Left */}
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
-                toggleBlock(editor, "align-right");
+                toggleBlock(editor, "align-left");
               }}
               className="p-2 hover:bg-gray-200 rounded"
-              title="Align Right"
+              title="Align Left"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -310,10 +391,10 @@ const JobDescriptionSection = () => {
                 strokeLinejoin="round"
                 className="w-5 h-5"
               >
-                <line x1="17" y1="10" x2="3" y2="10" />
+                <line x1="21" y1="10" x2="7" y2="10" />
                 <line x1="21" y1="6" x2="3" y2="6" />
                 <line x1="21" y1="14" x2="3" y2="14" />
-                <line x1="17" y1="18" x2="3" y2="18" />
+                <line x1="21" y1="18" x2="7" y2="18" />
               </svg>
             </button>
 
@@ -409,18 +490,16 @@ const JobDescriptionSection = () => {
             )}
             <Editable
               renderElement={renderElement}
+              renderLeaf={renderLeaf}
               className="min-h-[200px] text-gray-700"
-              onKeyDown={handleKeyDown}  // Make sure this line is included
-              onFocus={() => {
-                if (isPlaceholderVisible) {
-                  setIsPlaceholderVisible(false);
-                }
+              onChange={(newValue) => {
+                handleTextChange(newValue as unknown as Descendant[]); // Additional processing for text
               }}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setIsPlaceholderVisible(false)}
               onBlur={() => {
                 const plainText = value.map((node) => Node.string(node)).join("\n");
-                if (plainText.trim() === "") {
-                  setIsPlaceholderVisible(true);
-                }
+                setIsPlaceholderVisible(plainText.trim() === "");
               }}
             />
           </div>
@@ -536,7 +615,7 @@ const JobDescriptionSection = () => {
       {/* Character Counter */}
       <div className="flex justify-between mt-2">
         <span className="text-gray-500 text-sm">
-        {getRemainingCharacters(maxCharacters, value)} characters left
+          {getRemainingCharacters(maxCharacters, value)} characters left
         </span>
       </div>
       <p className="text-sm text-gray-500 mt-2">
