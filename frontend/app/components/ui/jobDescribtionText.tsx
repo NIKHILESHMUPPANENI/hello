@@ -2,15 +2,37 @@
 
 import React, { useMemo, useState, useCallback } from "react";
 import Icon from '@mdi/react';
-import { mdiFormatLetterCase, mdiFormatBold } from '@mdi/js';
+import {
+  mdiFormatLetterCase,
+  mdiFormatBold,
+  mdiFormatItalic,
+  mdiFormatUnderline,
+  mdiFormatAlignRight,
+  mdiFormatAlignCenter,
+  mdiFormatAlignLeft,
+  mdiFormatListBulleted,
+  mdiFormatListNumbered
+} from '@mdi/js';
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
-import { Slate, Editable, withReact, RenderElementProps, ReactEditor } from "slate-react";
-import { Element, Transforms, Editor, BaseEditor, createEditor, Descendant, Node } from "slate";
+import { Slate, Editable, withReact, RenderElementProps, ReactEditor, useSlate } from "slate-react";
+import { Element, Transforms, Editor, BaseEditor, createEditor, Descendant, Node, Element as SlateElement } from "slate";
 import { withHistory } from "slate-history";
 
+const LIST_TYPES = ['numbered-list', 'bulleted-list'];
 
-type CustomText = { text: string; bold?: boolean; uppercase?: boolean; italic?: boolean };
-type CustomElement = { type: "paragraph" | "code" | "align-left" | "align-center" | "align-right" | "bulleted-list" | "numbered-list"; children: CustomText[] };
+type CustomText = {
+  text: string;
+  bold?: boolean;
+  uppercase?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+};
+
+type CustomElement = {
+  type: "paragraph" | "code" | "align-left" | "align-center" | "align-right" | "bulleted-list" | "numbered-list" | "list-item";
+  align?: "left" | "center" | "right";
+  children: CustomText[];
+};
 
 declare module "slate" {
   interface CustomTypes {
@@ -93,15 +115,7 @@ const JobDescriptionSection = () => {
   };
 
 
-  const CodeElement = (props: RenderElementProps) => (
-    <pre {...props.attributes}>
-      <code>{props.children}</code>
-    </pre>
-  );
-
-  const DefaultElement = (props: RenderElementProps) => (
-    <p {...props.attributes}>{props.children}</p>
-  );
+  
 
   const toggleMark = (editor: any, format: string) => {
     const isActive = isMarkActive(editor, format);
@@ -117,21 +131,79 @@ const JobDescriptionSection = () => {
     return marks ? (marks as Record<string, any>)[format] === true : false;
   };
 
-  const isBlockActive = (editor: Editor, format: string) => {
-    const [match] = Editor.nodes(editor, {
-      match: (n) => isCustomElement(n) && n.type === format,
-    });
-    return !!match;
-  };
 
-  const toggleBlock = (editor: Editor, format: CustomElement['type']) => {
-    const isActive = isBlockActive(editor, format);
+  const toggleBlock = (
+    editor: Editor,
+    format: "bulleted-list" | "numbered-list" | "paragraph" | "align-left" | "align-center" | "align-right"
+  ) => {
+    const isAlignment = format.startsWith("align-");
+    const alignValue = isAlignment ? format.replace("align-", "") : undefined;
+  
+    if (isAlignment) {
+      // Handle text alignment
+      const isActive = Array.from(
+        Editor.nodes(editor, {
+          match: (n) => isCustomElement(n) && n.align === alignValue,
+        })
+      ).length > 0;
+  
+      Transforms.setNodes(
+        editor,
+        { align: isActive ? undefined : (alignValue as "left" | "center" | "right") },
+        { match: (n) => isCustomElement(n), mode: "lowest" }
+      );
+      return;
+    }
+  
+    if (format === "bulleted-list" || format === "numbered-list") {
+      // Handle lists
+      const isActive = Array.from(
+        Editor.nodes(editor, {
+          match: (n) => isCustomElement(n) && n.type === format,
+        })
+      ).length > 0;
+  
+      // Unwrap any existing list
+      Transforms.unwrapNodes(editor, {
+        match: (n) => isCustomElement(n) && LIST_TYPES.includes(n.type),
+        split: true,
+      });
+  
+      if (!isActive) {
+        // Wrap nodes in the new list type
+        Transforms.wrapNodes(
+          editor,
+          { type: format, children: [] },
+          { match: (n) => isCustomElement(n) }
+        );
+  
+        // Set each node as a list item
+        Transforms.setNodes(
+          editor,
+          { type: "list-item" },
+          { match: (n) => isCustomElement(n) }
+        );
+      }
+      return;
+    }
+  
+    // For other block types
+    const isActive = Array.from(
+      Editor.nodes(editor, {
+        match: (n) => isCustomElement(n) && n.type === format,
+      })
+    ).length > 0;
+  
     Transforms.setNodes(
       editor,
-      { type: isActive ? "paragraph" : format }, // Use the defined union type
-      { match: (n) => isCustomElement(n) }
+      { type: isActive ? "paragraph" : format },
+      { match: (n) => isCustomElement(n), mode: "lowest" }
     );
   };
+  
+  
+  
+  
 
   const toggleUppercase = (editor: Editor) => {
     const isActive = isMarkActive(editor, "uppercase");
@@ -147,7 +219,8 @@ const JobDescriptionSection = () => {
 
 
   type CustomElement = {
-    type: "paragraph" | "code" | "align-left" | "align-center" | "align-right" | "bulleted-list" | "numbered-list";
+    type: "paragraph" | "code" | "align-left" | "align-center" | "align-right" | "bulleted-list" | "numbered-list" | "list-item";
+    align?: "left" | "center" | "right";
     children: CustomText[];
   };
 
@@ -170,6 +243,7 @@ const JobDescriptionSection = () => {
       bold?: boolean;
       uppercase?: boolean;
       italic?: boolean;
+      underline?: boolean;
     };
   }
 
@@ -185,19 +259,49 @@ const JobDescriptionSection = () => {
     if (props.leaf.italic) {
       children = <em>{children}</em>;
     }
+    if (props.leaf.underline) {
+      children = <u>{children}</u>;
+    }
 
     return <span {...props.attributes}>{children}</span>;
   }, []);
 
 
   const renderElement = useCallback((props: RenderElementProps) => {
+    const style = props.element.align ? { textAlign: props.element.align } : {};
+  
     switch (props.element.type) {
+      case "bulleted-list":
+        return (
+          <ul style={style} {...props.attributes}>
+            {props.children}
+          </ul>
+        );
+      case "numbered-list":
+        return (
+          <ol style={style} {...props.attributes}>
+            {props.children}
+          </ol>
+        );
+      case "list-item":
+        return <li {...props.attributes}>{props.children}</li>;
       case "code":
-        return <CodeElement {...props} />;
+        return (
+          <pre style={style} {...props.attributes}>
+            <code>{props.children}</code>
+          </pre>
+        );
       default:
-        return <DefaultElement {...props} />;
+        return (
+          <p style={style} {...props.attributes}>
+            {props.children}
+          </p>
+        );
     }
   }, []);
+  
+  
+
 
 
   return (
@@ -228,7 +332,6 @@ const JobDescriptionSection = () => {
               onMouseDown={(event) => {
                 event.preventDefault();
                 toggleMark(editor, 'bold');
-                console.log('Bold toggled');
               }}
               className="p-2 hover:bg-gray-200 rounded"
               title="Bold"
@@ -245,20 +348,7 @@ const JobDescriptionSection = () => {
               className="p-2 hover:bg-gray-200 rounded"
               title="Italic"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <line x1="19" y1="4" x2="10" y2="4" />
-                <line x1="14" y1="20" x2="5" y2="20" />
-                <line x1="15" y1="4" x2="9" y2="20" />
-              </svg>
+              <Icon path={mdiFormatItalic} size={1} />
             </button>
 
             {/* Underline */}
@@ -270,18 +360,7 @@ const JobDescriptionSection = () => {
               className="p-2 hover:bg-gray-200 rounded"
               title="Underline"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <path d="M6 4v6a6 6 0 0 0 12 0V4M4 20h16" />
-              </svg>
+              <Icon path={mdiFormatUnderline} size={1} />
             </button>
 
 
@@ -328,22 +407,9 @@ const JobDescriptionSection = () => {
               className="p-2 hover:bg-gray-200 rounded"
               title="Align Right"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <line x1="17" y1="10" x2="3" y2="10" />
-                <line x1="21" y1="6" x2="3" y2="6" />
-                <line x1="21" y1="14" x2="3" y2="14" />
-                <line x1="17" y1="18" x2="3" y2="18" />
-              </svg>
+              <Icon path={mdiFormatAlignRight} size={1} />
             </button>
+
 
             {/* Align Center */}
             <button
@@ -354,21 +420,7 @@ const JobDescriptionSection = () => {
               className="p-2 hover:bg-gray-200 rounded"
               title="Align Center"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <line x1="21" y1="10" x2="3" y2="10" />
-                <line x1="17" y1="6" x2="7" y2="6" />
-                <line x1="17" y1="14" x2="7" y2="14" />
-                <line x1="21" y1="18" x2="3" y2="18" />
-              </svg>
+              <Icon path={mdiFormatAlignCenter} size={1} />
             </button>
 
 
@@ -381,21 +433,7 @@ const JobDescriptionSection = () => {
               className="p-2 hover:bg-gray-200 rounded"
               title="Align Left"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <line x1="21" y1="10" x2="7" y2="10" />
-                <line x1="21" y1="6" x2="3" y2="6" />
-                <line x1="21" y1="14" x2="3" y2="14" />
-                <line x1="21" y1="18" x2="7" y2="18" />
-              </svg>
+              <Icon path={mdiFormatAlignLeft} size={1} />
             </button>
 
             {/* Lists */}
@@ -408,23 +446,7 @@ const JobDescriptionSection = () => {
               className="p-2 hover:bg-gray-200 rounded"
               title="Bulleted List"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <circle cx="6" cy="6" r="2" />
-                <circle cx="6" cy="12" r="2" />
-                <circle cx="6" cy="18" r="2" />
-                <line x1="10" y1="6" x2="21" y2="6" />
-                <line x1="10" y1="12" x2="21" y2="12" />
-                <line x1="10" y1="18" x2="21" y2="18" />
-              </svg>
+              <Icon path={mdiFormatListBulleted} size={1} />
             </button>
 
             {/* Numbered List */}
@@ -436,21 +458,7 @@ const JobDescriptionSection = () => {
               className="p-2 hover:bg-gray-200 rounded"
               title="Numbered List"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <path d="M4 6h4M4 12h4M4 18h4" />
-                <line x1="10" y1="6" x2="21" y2="6" />
-                <line x1="10" y1="12" x2="21" y2="12" />
-                <line x1="10" y1="18" x2="21" y2="18" />
-              </svg>
+              <Icon path={mdiFormatListNumbered} size={1} />
             </button>
 
             {/* Link */}
@@ -560,7 +568,7 @@ const JobDescriptionSection = () => {
             </button>
 
             {/* Code Block */}
-            <button
+            {/* <button
               onMouseDown={(event) => {
                 event.preventDefault();
                 toggleBlock(editor, "code");
@@ -581,7 +589,7 @@ const JobDescriptionSection = () => {
                 <polyline points="16 18 22 12 16 6" />
                 <polyline points="8 6 2 12 8 18" />
               </svg>
-            </button>
+            </button> */}
 
             {/* Video */}
             <button
