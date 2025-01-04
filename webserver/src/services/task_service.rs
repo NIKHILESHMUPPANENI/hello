@@ -2,7 +2,7 @@ use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::result::Error;
 
-use crate::models::task::{NewTask, Priority, Progress, Task};
+use crate::models::task::{NewTask, Priority, Progress, SubTask, Task, TaskWithSubTasks};
 use crate::schema::tasks::{self};
 
 
@@ -49,7 +49,7 @@ pub(crate) fn get_task_by_id(
     conn: &mut PgConnection,
     task_id: i32,
     user: &i32,
-) -> Result<Task, Error> {
+) -> Result<TaskWithSubTasks, Error> {
     //make sure the task is within user project
     let user_project = crate::schema::projects::table
         .filter(crate::schema::projects::user_id.eq(user))
@@ -59,7 +59,15 @@ pub(crate) fn get_task_by_id(
         .filter(crate::schema::tasks::project_id.eq(user_project.id))
         .find(task_id)
         .first::<Task>(conn)?;
-    Ok(task)
+
+        let associated_subtasks = SubTask::belonging_to(&task)
+        .load::<SubTask>(conn)?;
+
+        Ok(TaskWithSubTasks {
+            task,
+            subtasks: associated_subtasks,
+        })
+    // Ok(task)
 }
 
 #[cfg(test)]
