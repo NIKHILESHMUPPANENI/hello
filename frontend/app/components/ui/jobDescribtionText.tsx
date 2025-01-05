@@ -11,28 +11,43 @@ import {
   mdiFormatAlignCenter,
   mdiFormatAlignLeft,
   mdiFormatListBulleted,
-  mdiFormatListNumbered
+  mdiFormatListNumbered,
+  mdiImage
 } from '@mdi/js';
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { Slate, Editable, withReact, RenderElementProps, ReactEditor, useSlate } from "slate-react";
-import { Element, Transforms, Editor, BaseEditor, createEditor, Descendant, Node, Element as SlateElement } from "slate";
+import {
+  Transforms, Editor, BaseEditor, createEditor, Descendant, Node, Element as SlateElement, Range,
+  Point
+} from "slate";
 import { withHistory } from "slate-history";
 
-const LIST_TYPES = ['numbered-list', 'bulleted-list'];
 
-type CustomText = {
+type ElementType =
+  | 'paragraph'
+  | 'bulleted-list'
+  | 'numbered-list'
+  | 'list-item'
+  | 'align-left'
+  | 'align-center'
+  | 'align-right'
+  | 'image';
+
+interface CustomText {
   text: string;
   bold?: boolean;
   uppercase?: boolean;
   italic?: boolean;
   underline?: boolean;
-};
+}
 
-type CustomElement = {
-  type: "paragraph" | "code" | "align-left" | "align-center" | "align-right" | "bulleted-list" | "numbered-list" | "list-item";
-  align?: "left" | "center" | "right";
-  children: CustomText[];
-};
+// Custom element properties
+interface CustomElement {
+  type: ElementType;
+  children: CustomText[]; // Images still need children for Slate
+  align?: 'left' | 'center' | 'right'; // For alignment
+  src?: string; // For image URL
+}
 
 declare module "slate" {
   interface CustomTypes {
@@ -42,13 +57,111 @@ declare module "slate" {
   }
 }
 
+const LIST_TYPES = ['numbered-list', 'bulleted-list'] as const;
 const PLACEHOLDER_TEXT = "Describe the job you are trying to outsource";
 
+
+const withLists = (editor: Editor) => {
+  const { deleteBackward, insertBreak, normalizeNode } = editor;
+
+  editor.normalizeNode = ([node, path]) => {
+    if (SlateElement.isElement(node) && LIST_TYPES.includes(node.type as typeof LIST_TYPES[number])) {
+      for (const [child, childPath] of Node.children(editor, path)) {
+        if (SlateElement.isElement(child) && child.type !== 'list-item') {
+          Transforms.setNodes(editor, { type: 'list-item' }, { at: childPath });
+          return;
+        }
+      }
+    }
+    normalizeNode([node, path]);
+  };
+
+  editor.deleteBackward = (...args) => {
+    const { selection } = editor;
+
+    if (selection && Range.isCollapsed(selection)) {
+      const [match] = Editor.nodes(editor, {
+        match: n =>
+          !Editor.isEditor(n) &&
+          SlateElement.isElement(n) &&
+          n.type === 'list-item',
+      });
+
+      if (match) {
+        const [, path] = match;
+        const start = Editor.start(editor, path);
+
+        if (Point.equals(selection.anchor, start)) {
+          const newProperties: Partial<CustomElement> = { type: 'paragraph' };
+          Transforms.setNodes(editor, newProperties);
+
+          // Unwrap the list if this is the last item
+          const [parent] = Editor.parent(editor, path);
+          if (SlateElement.isElement(parent) && parent.children.length === 1) {
+            Transforms.unwrapNodes(editor, {
+              match: n =>
+                !Editor.isEditor(n) &&
+                SlateElement.isElement(n) &&
+                LIST_TYPES.includes(n.type as typeof LIST_TYPES[number]),
+            });
+          }
+          return;
+        }
+      }
+    }
+
+    deleteBackward(...args);
+  };
+
+  editor.insertBreak = () => {
+    const { selection } = editor;
+
+    if (selection) {
+      const [list] = Editor.nodes(editor, {
+        match: n =>
+          !Editor.isEditor(n) &&
+          SlateElement.isElement(n) &&
+          n.type === 'list-item',
+      });
+
+      if (list) {
+        const [node] = list;
+        if (Node.string(node).length === 0) {
+          Transforms.unwrapNodes(editor, {
+            match: n =>
+              !Editor.isEditor(n) &&
+              SlateElement.isElement(n) &&
+              LIST_TYPES.includes(n.type as typeof LIST_TYPES[number]),
+            split: true,
+          });
+          const newProperties: Partial<CustomElement> = { type: 'paragraph' };
+          Transforms.setNodes(editor, newProperties);
+          return;
+        }
+
+        // Insert new list item
+        const listItem: CustomElement = {
+          type: 'list-item',
+          children: [{ text: '' }]
+        };
+
+        Transforms.insertNodes(editor, listItem);
+        return;
+      }
+    }
+
+    insertBreak();
+  };
+
+  return editor;
+};
+
 const JobDescriptionSection = () => {
-  const editor = useMemo(() => withHistory(withReact(createEditor())), []);
+  const editor = useMemo(() => withLists(withHistory(withReact(createEditor()))), []);
+
   const [value, setValue] = useState<Descendant[]>([
     {
-      type: "paragraph",
+      type: "paragraph" as const,
       children: [{ text: "" }],
     },
   ]);
@@ -63,7 +176,7 @@ const JobDescriptionSection = () => {
     // Check if the content is empty or just whitespace
     if (plainText.trim() === "") {
       setIsPlaceholderVisible(true);
-      setValue([{ type: "paragraph", children: [{ text: "" }] }]);
+      setValue([{ type: "paragraph", children: [{ text: "" }] }] as Descendant[]);
       return;
     }
 
@@ -74,16 +187,54 @@ const JobDescriptionSection = () => {
       return;
     }
 
-    // If we're over the limit, prevent the change
     const currentText = value.map((node) => Node.string(node)).join("\n");
     if (currentText.length >= maxCharacters) {
-      // Don't update if we're already at or over the limit
       return;
     }
 
-    // If this is a new change that would exceed the limit,
-    // keep the current value
     setValue(value);
+  };
+
+
+  const isBlockActive = (editor: Editor, format: ElementType) => {
+    const { selection } = editor;
+    if (!selection) return false;
+
+    const [match] = Array.from(
+      Editor.nodes(editor, {
+        at: selection,
+        match: n =>
+          !Editor.isEditor(n) &&
+          SlateElement.isElement(n) &&
+          n.type === format,
+      })
+    );
+
+    return !!match;
+  };
+
+  const toggleBlock = (editor: Editor, format: ElementType) => {
+    const isActive = isBlockActive(editor, format);
+    const isList = LIST_TYPES.includes(format as typeof LIST_TYPES[number]);
+
+    Transforms.unwrapNodes(editor, {
+      match: n =>
+        !Editor.isEditor(n) &&
+        SlateElement.isElement(n) &&
+        LIST_TYPES.includes(n.type as typeof LIST_TYPES[number]),
+      split: true,
+    });
+
+    const newProperties: Partial<CustomElement> = {
+      type: isActive ? 'paragraph' : isList ? 'list-item' : format,
+    };
+
+    Transforms.setNodes(editor, newProperties);
+
+    if (!isActive && isList) {
+      const block = { type: format, children: [] };
+      Transforms.wrapNodes(editor, block);
+    }
   };
 
   // Add this function to handle keyboard events
@@ -111,13 +262,13 @@ const JobDescriptionSection = () => {
   }, [value, maxCharacters]);  // Add dependencies
 
   const getRemainingCharacters = (maxCharacters: number, value: Descendant[]): number => {
-    return maxCharacters - value.reduce((acc: number, node: Descendant) => acc + Node.string(node).length, 0);
+    return maxCharacters - value.reduce((acc: number, node: Node) => acc + Node.string(node).length, 0);
   };
 
 
-  
 
-  const toggleMark = (editor: any, format: string) => {
+
+  const toggleMark = (editor: Editor, format: keyof Omit<CustomText, 'text'>) => {
     const isActive = isMarkActive(editor, format);
     if (isActive) {
       Editor.removeMark(editor, format);
@@ -126,84 +277,12 @@ const JobDescriptionSection = () => {
     }
   };
 
-  const isMarkActive = (editor: any, format: string) => {
+  const isMarkActive = (editor: Editor, format: keyof Omit<CustomText, 'text'>) => {
     const marks = Editor.marks(editor);
-    return marks ? (marks as Record<string, any>)[format] === true : false;
+    return marks ? marks[format] === true : false;
   };
 
 
-  const toggleBlock = (
-    editor: Editor,
-    format: "bulleted-list" | "numbered-list" | "paragraph" | "align-left" | "align-center" | "align-right"
-  ) => {
-    const isAlignment = format.startsWith("align-");
-    const alignValue = isAlignment ? format.replace("align-", "") : undefined;
-  
-    if (isAlignment) {
-      // Handle text alignment
-      const isActive = Array.from(
-        Editor.nodes(editor, {
-          match: (n) => isCustomElement(n) && n.align === alignValue,
-        })
-      ).length > 0;
-  
-      Transforms.setNodes(
-        editor,
-        { align: isActive ? undefined : (alignValue as "left" | "center" | "right") },
-        { match: (n) => isCustomElement(n), mode: "lowest" }
-      );
-      return;
-    }
-  
-    if (format === "bulleted-list" || format === "numbered-list") {
-      // Handle lists
-      const isActive = Array.from(
-        Editor.nodes(editor, {
-          match: (n) => isCustomElement(n) && n.type === format,
-        })
-      ).length > 0;
-  
-      // Unwrap any existing list
-      Transforms.unwrapNodes(editor, {
-        match: (n) => isCustomElement(n) && LIST_TYPES.includes(n.type),
-        split: true,
-      });
-  
-      if (!isActive) {
-        // Wrap nodes in the new list type
-        Transforms.wrapNodes(
-          editor,
-          { type: format, children: [] },
-          { match: (n) => isCustomElement(n) }
-        );
-  
-        // Set each node as a list item
-        Transforms.setNodes(
-          editor,
-          { type: "list-item" },
-          { match: (n) => isCustomElement(n) }
-        );
-      }
-      return;
-    }
-  
-    // For other block types
-    const isActive = Array.from(
-      Editor.nodes(editor, {
-        match: (n) => isCustomElement(n) && n.type === format,
-      })
-    ).length > 0;
-  
-    Transforms.setNodes(
-      editor,
-      { type: isActive ? "paragraph" : format },
-      { match: (n) => isCustomElement(n), mode: "lowest" }
-    );
-  };
-  
-  
-  
-  
 
   const toggleUppercase = (editor: Editor) => {
     const isActive = isMarkActive(editor, "uppercase");
@@ -217,24 +296,35 @@ const JobDescriptionSection = () => {
 
 
 
-
-  type CustomElement = {
-    type: "paragraph" | "code" | "align-left" | "align-center" | "align-right" | "bulleted-list" | "numbered-list" | "list-item";
-    align?: "left" | "center" | "right";
-    children: CustomText[];
-  };
-
-  const isCustomElement = (node: Node): node is CustomElement => {
-    return Element.isElement(node) && "type" in node;
-  };
-
-
   const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false); // Toggle Emoji Picker
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
     Transforms.insertText(editor, emojiData.emoji); // Insert emoji at cursor position
     setIsEmojiPickerVisible(false); // Close picker after selection
   };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        insertImage(editor, base64); // Insert the base64 image into the editor
+      };
+      reader.readAsDataURL(file); // Convert the image to a base64 string
+    }
+  };
+  
+
+  const insertImage = (editor: Editor, src: string) => {
+    const image: CustomElement = {
+      type: 'image',
+      src, // Base64 string or URL
+      children: [{ text: '' }], // Empty children to satisfy Slate's requirements
+    };
+    Transforms.insertNodes(editor, image);
+  };
+  
 
   interface RenderLeafProps {
     attributes: any;
@@ -268,39 +358,35 @@ const JobDescriptionSection = () => {
 
 
   const renderElement = useCallback((props: RenderElementProps) => {
-    const style = props.element.align ? { textAlign: props.element.align } : {};
-  
-    switch (props.element.type) {
-      case "bulleted-list":
-        return (
-          <ul style={style} {...props.attributes}>
-            {props.children}
-          </ul>
-        );
-      case "numbered-list":
-        return (
-          <ol style={style} {...props.attributes}>
-            {props.children}
-          </ol>
-        );
-      case "list-item":
-        return <li {...props.attributes}>{props.children}</li>;
-      case "code":
-        return (
-          <pre style={style} {...props.attributes}>
-            <code>{props.children}</code>
-          </pre>
-        );
+    const { element, attributes, children } = props;
+    const el = element as CustomElement;
+
+    switch (el.type) {
+      case 'image':
+      return (
+        <div {...attributes}>
+          <img src={el.src} alt="Image" style={{ maxWidth: '100%' }} />
+          {children /* Keep children for Slate compatibility */}
+        </div>
+      );
+      case 'bulleted-list':
+        return <ul style={{ listStyleType: 'disc', paddingLeft: '1em' }} {...attributes}>{children}</ul>;
+      case 'numbered-list':
+        return <ol style={{ listStyleType: 'decimal', paddingLeft: '1em' }} {...attributes}>{children}</ol>;
+      case 'list-item':
+        return <li {...attributes}>{children}</li>;
+      case 'align-left':
+        return <p style={{ textAlign: 'left' }} {...attributes}>{children}</p>;
+      case 'align-center':
+        return <p style={{ textAlign: 'center' }} {...attributes}>{children}</p>;
+      case 'align-right':
+        return <p style={{ textAlign: 'right' }} {...attributes}>{children}</p>;
       default:
-        return (
-          <p style={style} {...props.attributes}>
-            {props.children}
-          </p>
-        );
+        return <p {...attributes}>{children}</p>;
     }
   }, []);
-  
-  
+
+
 
 
 
@@ -518,29 +604,25 @@ const JobDescriptionSection = () => {
           {/* Bottom Toolbar */}
           <div className="flex flex-wrap gap-2 mt-2 border-t pt-2">
             {/* Image */}
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                // Add functionality for inserting an image
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Insert Image"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="M21 15l-5-5L5 21" />
-              </svg>
-            </button>
+            {/* Insert Image */}
+<button
+  onMouseDown={(event) => {
+    event.preventDefault();
+    document.getElementById("image-upload-input")?.click(); // Trigger file input click
+  }}
+  className="p-2 hover:bg-gray-200 rounded"
+  title="Insert Image"
+>
+  <Icon path={mdiImage} size={1} />
+</button>
+<input
+  id="image-upload-input"
+  type="file"
+  accept="image/*"
+  style={{ display: "none" }}
+  onChange={(event) => handleImageUpload(event)}
+/>
+
 
             {/* Microphone */}
             <button
