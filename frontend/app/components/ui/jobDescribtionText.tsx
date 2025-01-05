@@ -12,7 +12,11 @@ import {
   mdiFormatAlignLeft,
   mdiFormatListBulleted,
   mdiFormatListNumbered,
-  mdiImage
+  mdiImage,
+  mdiMicrophone,
+  mdiVideo,
+  mdiUpload,
+  mdiCodeBraces as mdiCodeBlock,
 } from '@mdi/js';
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { Slate, Editable, withReact, RenderElementProps, ReactEditor, useSlate } from "slate-react";
@@ -31,7 +35,10 @@ type ElementType =
   | 'align-left'
   | 'align-center'
   | 'align-right'
-  | 'image';
+  | 'image'
+  | 'audio'
+  | 'video'
+  | 'code-block';
 
 interface CustomText {
   text: string;
@@ -171,6 +178,7 @@ const JobDescriptionSection = () => {
   const maxCharacters = 1000;
 
   const handleTextChange = (newValue: Descendant[]) => {
+    console.log('Current editor value:', JSON.stringify(newValue, null, 2)); // Debugging log
     const plainText = newValue.map((node) => Node.string(node)).join("\n");
 
     // Check if the content is empty or just whitespace
@@ -209,14 +217,18 @@ const JobDescriptionSection = () => {
           n.type === format,
       })
     );
-
+    console.log('Active block match:', match); // Debugging log
     return !!match;
   };
 
   const toggleBlock = (editor: Editor, format: ElementType) => {
+    // console.log(`Toggling block type to: ${format}`); // Debugging log
     const isActive = isBlockActive(editor, format);
     const isList = LIST_TYPES.includes(format as typeof LIST_TYPES[number]);
 
+    console.log('Block active status:', isActive); // Debugging log
+
+    // Unwrap existing list if needed
     Transforms.unwrapNodes(editor, {
       match: n =>
         !Editor.isEditor(n) &&
@@ -226,16 +238,21 @@ const JobDescriptionSection = () => {
     });
 
     const newProperties: Partial<CustomElement> = {
-      type: isActive ? 'paragraph' : isList ? 'list-item' : format,
+      // type: isActive ? 'paragraph' : isList ? 'list-item' : format,
+      type: isActive ? 'paragraph' : format, // Toggle between paragraph and format
     };
 
-    Transforms.setNodes(editor, newProperties);
+    console.log('Setting block type to:', newProperties.type); // Debugging log
+    // Transforms.setNodes(editor, newProperties);
+    Transforms.setNodes(editor, { type: 'code-block' });
+    
 
     if (!isActive && isList) {
       const block = { type: format, children: [] };
       Transforms.wrapNodes(editor, block);
     }
   };
+
 
   // Add this function to handle keyboard events
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -314,7 +331,7 @@ const JobDescriptionSection = () => {
       reader.readAsDataURL(file); // Convert the image to a base64 string
     }
   };
-  
+
 
   const insertImage = (editor: Editor, src: string) => {
     const image: CustomElement = {
@@ -324,7 +341,114 @@ const JobDescriptionSection = () => {
     };
     Transforms.insertNodes(editor, image);
   };
-  
+
+  const insertAudio = (editor: Editor, src: string) => {
+    const audio: CustomElement = {
+      type: 'audio',
+      src,
+      children: [{ text: '' }], // Empty children for Slate compatibility
+    };
+    Transforms.insertNodes(editor, audio);
+  };
+
+  const handleAudioRecord = () => {
+    console.log("Audio recording started"); // Debug log
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Your browser does not support audio recording.');
+      return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then((stream) => {
+        const mediaRecorder = new MediaRecorder(stream);
+        const audioChunks: Blob[] = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          console.log("Data available:", event.data); // Debug log
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          console.log("Recording stopped"); // Debug log
+          const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          console.log("Audio URL:", audioUrl); // Debug log
+          insertAudio(editor, audioUrl); // Insert the audio into the editor
+        };
+
+        mediaRecorder.start();
+        console.log("MediaRecorder started"); // Debug log
+
+        // Stop recording after 5 seconds
+        setTimeout(() => {
+          mediaRecorder.stop();
+          stream.getTracks().forEach((track) => track.stop());
+        }, 5000); // 5 seconds
+      })
+      .catch((error) => {
+        console.error('Error accessing microphone:', error); // Debug log
+      });
+  };
+
+  const insertVideo = (editor: Editor, src: string) => {
+    const video: CustomElement = {
+      type: 'video',
+      src,
+      children: [{ text: '' }], // Empty children for Slate compatibility
+    };
+    Transforms.insertNodes(editor, video);
+  };
+
+  const handleVideoRecord = () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Your browser does not support video recording.');
+      return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then((stream) => {
+        const mediaRecorder = new MediaRecorder(stream);
+        const videoChunks: Blob[] = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            videoChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const videoBlob = new Blob(videoChunks, { type: 'video/mp4' });
+          const videoUrl = URL.createObjectURL(videoBlob);
+          insertVideo(editor, videoUrl); // Insert the video into the editor
+        };
+
+        mediaRecorder.start();
+
+        // Stop recording after 10 seconds or based on user action
+        setTimeout(() => {
+          mediaRecorder.stop();
+          stream.getTracks().forEach((track) => track.stop());
+        }, 10000); // 10 seconds
+      })
+      .catch((error) => {
+        console.error('Error accessing camera:', error);
+      });
+  };
+
+  const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const videoUrl = URL.createObjectURL(file);
+      insertVideo(editor, videoUrl); // Insert the video into the editor
+    }
+  };
+
+
+
+
+
 
   interface RenderLeafProps {
     attributes: any;
@@ -358,17 +482,38 @@ const JobDescriptionSection = () => {
 
 
   const renderElement = useCallback((props: RenderElementProps) => {
+    console.log('Rendering element:', props.element.type); // Debugging log
     const { element, attributes, children } = props;
     const el = element as CustomElement;
 
     switch (el.type) {
+      case 'code-block':
+        return (
+          <pre {...attributes} style={{ background: '#f5f5f5', padding: '10px', borderRadius: '5px', fontFamily: 'monospace' }}>
+            <code>{children}</code>
+          </pre>
+        );
+      case 'video':
+        return (
+          <div {...attributes}>
+            <video controls src={el.src} style={{ maxWidth: '100%' }} />
+            {children /* Keep children for Slate compatibility */}
+          </div>
+        );
+      case 'audio':
+        return (
+          <div {...attributes}>
+            <audio controls src={el.src} style={{ width: '100%' }} />
+            {children /* Keep children for Slate compatibility */}
+          </div>
+        );
       case 'image':
-      return (
-        <div {...attributes}>
-          <img src={el.src} alt="Image" style={{ maxWidth: '100%' }} />
-          {children /* Keep children for Slate compatibility */}
-        </div>
-      );
+        return (
+          <div {...attributes}>
+            <img src={el.src} alt="Image" style={{ maxWidth: '100%' }} />
+            {children /* Keep children for Slate compatibility */}
+          </div>
+        );
       case 'bulleted-list':
         return <ul style={{ listStyleType: 'disc', paddingLeft: '1em' }} {...attributes}>{children}</ul>;
       case 'numbered-list':
@@ -484,18 +629,17 @@ const JobDescriptionSection = () => {
             </div>
 
 
-            {/* Align Right */}
+            {/* Align Left */}
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
-                toggleBlock(editor, "align-right");
+                toggleBlock(editor, "align-left");
               }}
               className="p-2 hover:bg-gray-200 rounded"
-              title="Align Right"
+              title="Align Left"
             >
-              <Icon path={mdiFormatAlignRight} size={1} />
+              <Icon path={mdiFormatAlignLeft} size={1} />
             </button>
-
 
             {/* Align Center */}
             <button
@@ -510,17 +654,19 @@ const JobDescriptionSection = () => {
             </button>
 
 
-            {/* Align Left */}
+
+            {/* Align Right */}
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
-                toggleBlock(editor, "align-left");
+                toggleBlock(editor, "align-right");
               }}
               className="p-2 hover:bg-gray-200 rounded"
-              title="Align Left"
+              title="Align Right"
             >
-              <Icon path={mdiFormatAlignLeft} size={1} />
+              <Icon path={mdiFormatAlignRight} size={1} />
             </button>
+
 
             {/* Lists */}
             {/* Bulleted List */}
@@ -605,97 +751,83 @@ const JobDescriptionSection = () => {
           <div className="flex flex-wrap gap-2 mt-2 border-t pt-2">
             {/* Image */}
             {/* Insert Image */}
-<button
-  onMouseDown={(event) => {
-    event.preventDefault();
-    document.getElementById("image-upload-input")?.click(); // Trigger file input click
-  }}
-  className="p-2 hover:bg-gray-200 rounded"
-  title="Insert Image"
->
-  <Icon path={mdiImage} size={1} />
-</button>
-<input
-  id="image-upload-input"
-  type="file"
-  accept="image/*"
-  style={{ display: "none" }}
-  onChange={(event) => handleImageUpload(event)}
-/>
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                document.getElementById("image-upload-input")?.click(); // Trigger file input click
+              }}
+              className="p-2 hover:bg-gray-200 rounded"
+              title="Insert Image"
+            >
+              <Icon path={mdiImage} size={1} />
+            </button>
+            <input
+              id="image-upload-input"
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(event) => handleImageUpload(event)}
+            />
 
 
             {/* Microphone */}
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
-                // Add functionality for microphone input
+                handleAudioRecord(); // Start audio recording
               }}
               className="p-2 hover:bg-gray-200 rounded"
               title="Record Audio"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4z" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
+              <Icon path={mdiMicrophone} size={1} />
             </button>
 
+
             {/* Code Block */}
-            {/* <button
+            <button
               onMouseDown={(event) => {
                 event.preventDefault();
-                toggleBlock(editor, "code");
+                toggleBlock(editor, "code-block"); // Use "code-block" type
               }}
               className="p-2 hover:bg-gray-200 rounded"
               title="Insert Code Block"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <polyline points="16 18 22 12 16 6" />
-                <polyline points="8 6 2 12 8 18" />
-              </svg>
-            </button> */}
+              <Icon path={mdiCodeBlock} size={1} />
+            </button>
+
 
             {/* Video */}
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                // Add functionality for inserting a video
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Insert Video"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
+            {/* Insert Video */}
+            <div>
+              <button
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  handleVideoRecord(); // Start video recording
+                }}
+                className="p-2 hover:bg-gray-200 rounded"
+                title="Record Video"
               >
-                <polygon points="23 7 16 12 23 17 23 7" />
-                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-              </svg>
-            </button>
+                <Icon path={mdiVideo} size={1} />
+              </button>
+              <input
+                id="video-upload-input"
+                type="file"
+                accept="video/*"
+                style={{ display: "none" }}
+                onChange={(event) => handleVideoUpload(event)}
+              />
+              <button
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  document.getElementById('video-upload-input')?.click(); // Trigger file input
+                }}
+                className="p-2 hover:bg-gray-200 rounded"
+                title="Upload Video"
+              >
+                <Icon path={mdiUpload} size={1} />
+              </button>
+            </div>
+
           </div>
         </Slate>
       </div>
