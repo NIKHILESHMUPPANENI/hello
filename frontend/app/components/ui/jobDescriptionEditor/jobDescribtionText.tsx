@@ -17,6 +17,7 @@ import {
   mdiVideo,
   mdiUpload,
   mdiCodeBraces as mdiCodeBlock,
+  mdiLink
 } from '@mdi/js';
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { Slate, Editable, withReact, RenderElementProps, ReactEditor, useSlate } from "slate-react";
@@ -38,7 +39,9 @@ type ElementType =
   | 'image'
   | 'audio'
   | 'video'
-  | 'code-block';
+  | 'code-block'
+  | 'link';
+
 
 interface CustomText {
   text: string;
@@ -52,6 +55,7 @@ interface CustomText {
 interface CustomElement {
   type: ElementType;
   children: CustomText[]; // Images still need children for Slate
+  href?: string; // For links
   align?: 'left' | 'center' | 'right'; // For alignment
   src?: string; // For image URL
 }
@@ -64,8 +68,47 @@ declare module "slate" {
   }
 }
 
+
 const LIST_TYPES = ['numbered-list', 'bulleted-list'] as const;
 const PLACEHOLDER_TEXT = "Describe the job you are trying to outsource";
+
+const withInlines = (editor: Editor) => {
+  const { isInline, isVoid, insertBreak } = editor;
+
+  editor.isInline = element =>
+    element.type === 'link' ? true : isInline(element);
+
+  editor.isVoid = element =>
+    ['image', 'video', 'audio'].includes(element.type) || isVoid(element);
+
+  editor.insertBreak = () => {
+    const { selection } = editor;
+    if (selection && isLinkActive(editor)) {
+      // Insert break after link
+      Transforms.move(editor);
+    }
+    insertBreak();
+  };
+
+  return editor;
+};
+
+const isLinkActive = (editor: Editor) => {
+  const [link] = Editor.nodes(editor, {
+    match: n =>
+      !Editor.isEditor(n) &&
+      SlateElement.isElement(n) &&
+      n.type === 'link',
+  });
+  return !!link;
+};
+
+const unwrapLink = (editor: Editor) => {
+  Transforms.unwrapNodes(editor, {
+    match: n => !Editor.isEditor(n) && SlateElement.isElement(n) && n.type === 'link',
+    split: true,
+  });
+};
 
 
 const withLists = (editor: Editor) => {
@@ -164,7 +207,11 @@ const withLists = (editor: Editor) => {
 };
 
 const JobDescriptionSection = () => {
-  const editor = useMemo(() => withLists(withHistory(withReact(createEditor()))), []);
+  // const editor = useMemo(() => withLists(withHistory(withReact(createEditor()))), []);
+  const editor = useMemo(
+    () => withInlines(withLists(withHistory(withReact(createEditor())))),
+    []
+  );
 
   const [value, setValue] = useState<Descendant[]>([
     {
@@ -178,7 +225,7 @@ const JobDescriptionSection = () => {
   const maxCharacters = 1000;
 
   const handleTextChange = (newValue: Descendant[]) => {
-    console.log('Current editor value:', JSON.stringify(newValue, null, 2)); // Debugging log
+    // console.log('Current editor value:', JSON.stringify(newValue, null, 2)); // Debugging log
     const plainText = newValue.map((node) => Node.string(node)).join("\n");
 
     // Check if the content is empty or just whitespace
@@ -245,7 +292,7 @@ const JobDescriptionSection = () => {
     console.log('Setting block type to:', newProperties.type); // Debugging log
     // Transforms.setNodes(editor, newProperties);
     Transforms.setNodes(editor, { type: 'code-block' });
-    
+
 
     if (!isActive && isList) {
       const block = { type: format, children: [] };
@@ -445,6 +492,46 @@ const JobDescriptionSection = () => {
     }
   };
 
+  const insertLink = (editor: Editor, url: string) => {
+    if (isLinkActive(editor)) {
+      unwrapLink(editor);
+    }
+
+    const { selection } = editor;
+    if (!selection) return;
+
+    // Normalize the URL
+    const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+
+    const isCollapsed = Range.isCollapsed(selection);
+
+    if (isCollapsed) {
+      Transforms.insertNodes(editor, {
+        type: 'link',
+        href: normalizedUrl,
+        children: [{ text: url }],
+      });
+      // Move cursor after link and insert a space
+      Transforms.move(editor);
+      Transforms.insertText(editor, ' ');
+    } else {
+      Transforms.wrapNodes(
+        editor,
+        { type: 'link', href: normalizedUrl, children: [] },
+        { split: true }
+      );
+      // Move cursor after selection and insert a space
+      Transforms.collapse(editor, { edge: 'end' });
+      Transforms.insertText(editor, ' ');
+    }
+  };
+
+
+
+
+
+
+
 
 
 
@@ -482,14 +569,43 @@ const JobDescriptionSection = () => {
 
 
   const renderElement = useCallback((props: RenderElementProps) => {
-    console.log('Rendering element:', props.element.type); // Debugging log
+    // console.log('Rendering element:', props.element.type); // Debugging log
     const { element, attributes, children } = props;
     const el = element as CustomElement;
 
     switch (el.type) {
+      case 'link':
+        return (
+          <a
+            {...attributes}
+            href={el.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            contentEditable={false}
+            style={{
+              color: '#0000EE',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              pointerEvents: 'all'
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              window.open(el.href, '_blank');
+            }}
+          >
+            {children}
+          </a>
+        );
       case 'code-block':
         return (
-          <pre {...attributes} style={{ background: '#f5f5f5', padding: '10px', borderRadius: '5px', fontFamily: 'monospace' }}>
+          <pre {...attributes}
+            style={{
+              background: '#f5f5f5',
+              padding: '10px',
+              borderRadius: '5px',
+              fontFamily: 'monospace',
+            }}
+          >
             <code>{children}</code>
           </pre>
         );
@@ -697,27 +813,18 @@ const JobDescriptionSection = () => {
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
-                const url = prompt("Enter the URL:");
-                if (url) {
-                  Editor.addMark(editor, "link", url);
+                if (isLinkActive(editor)) {
+                  unwrapLink(editor);
+                } else {
+                  const url = window.prompt('Enter the URL:');
+                  if (!url) return;
+                  insertLink(editor, url);
                 }
               }}
-              className="p-2 hover:bg-gray-200 rounded"
+              className={`p-2 hover:bg-gray-200 rounded ${isLinkActive(editor) ? 'bg-gray-200' : ''}`}
               title="Add Link"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <path d="M10 13a5 5 0 0 1 7-7l1-1a7 7 0 0 0-10 10l1-1z" />
-                <path d="M14 11a5 5 0 0 1-7 7l-1 1a7 7 0 0 0 10-10l-1 1z" />
-              </svg>
+              <Icon path={mdiLink} size={1} />
             </button>
           </div>
 

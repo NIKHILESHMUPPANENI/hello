@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Navbar } from "../components";
 import CustomInput from "@/components/ui/custom-input";
-import JobDescriptionSection from "./ui/jobDescribtionText";
+import JobDescriptionSection from "./ui/jobDescriptionEditor/jobDescribtionText";
 
 export const FILE_DROP = "Drag & drop your company logo (format: .jpeg, .png). Max 25 MB.";
 export const PAGE_TOP = "FlowerWork will help you to create an announcement for LinkedIn to " +
