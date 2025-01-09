@@ -20,191 +20,31 @@ import {
   mdiLink
 } from '@mdi/js';
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
-import { Slate, Editable, withReact, RenderElementProps, ReactEditor, useSlate } from "slate-react";
+import { Slate, Editable, withReact, RenderElementProps } from "slate-react";
 import {
-  Transforms, Editor, BaseEditor, createEditor, Descendant, Node, Element as SlateElement, Range,
-  Point
+  Transforms,
+  Editor,
+  createEditor,
+  Descendant,
+  Node,
+  Element as SlateElement,
+  Range
 } from "slate";
 import { withHistory } from "slate-history";
+import {
+  withInlines,
+  LIST_TYPES,
+  withLists,
+  isLinkActive,
+  unwrapLink,
+  type CustomElement,
+  type CustomText,
+  type ElementType
+} from './editorSetup';
+import { TopToolbar, BottomToolbar } from './toolBar';
 
-
-type ElementType =
-  | 'paragraph'
-  | 'bulleted-list'
-  | 'numbered-list'
-  | 'list-item'
-  | 'align-left'
-  | 'align-center'
-  | 'align-right'
-  | 'image'
-  | 'audio'
-  | 'video'
-  | 'code-block'
-  | 'link';
-
-
-interface CustomText {
-  text: string;
-  bold?: boolean;
-  uppercase?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-}
-
-// Custom element properties
-interface CustomElement {
-  type: ElementType;
-  children: CustomText[]; // Images still need children for Slate
-  href?: string; // For links
-  align?: 'left' | 'center' | 'right'; // For alignment
-  src?: string; // For image URL
-}
-
-declare module "slate" {
-  interface CustomTypes {
-    Editor: BaseEditor & ReactEditor;
-    Element: CustomElement;
-    Text: CustomText;
-  }
-}
-
-
-const LIST_TYPES = ['numbered-list', 'bulleted-list'] as const;
 const PLACEHOLDER_TEXT = "Describe the job you are trying to outsource";
 
-const withInlines = (editor: Editor) => {
-  const { isInline, isVoid, insertBreak } = editor;
-
-  editor.isInline = element =>
-    element.type === 'link' ? true : isInline(element);
-
-  editor.isVoid = element =>
-    ['image', 'video', 'audio'].includes(element.type) || isVoid(element);
-
-  editor.insertBreak = () => {
-    const { selection } = editor;
-    if (selection && isLinkActive(editor)) {
-      // Insert break after link
-      Transforms.move(editor);
-    }
-    insertBreak();
-  };
-
-  return editor;
-};
-
-const isLinkActive = (editor: Editor) => {
-  const [link] = Editor.nodes(editor, {
-    match: n =>
-      !Editor.isEditor(n) &&
-      SlateElement.isElement(n) &&
-      n.type === 'link',
-  });
-  return !!link;
-};
-
-const unwrapLink = (editor: Editor) => {
-  Transforms.unwrapNodes(editor, {
-    match: n => !Editor.isEditor(n) && SlateElement.isElement(n) && n.type === 'link',
-    split: true,
-  });
-};
-
-
-const withLists = (editor: Editor) => {
-  const { deleteBackward, insertBreak, normalizeNode } = editor;
-
-  editor.normalizeNode = ([node, path]) => {
-    if (SlateElement.isElement(node) && LIST_TYPES.includes(node.type as typeof LIST_TYPES[number])) {
-      for (const [child, childPath] of Node.children(editor, path)) {
-        if (SlateElement.isElement(child) && child.type !== 'list-item') {
-          Transforms.setNodes(editor, { type: 'list-item' }, { at: childPath });
-          return;
-        }
-      }
-    }
-    normalizeNode([node, path]);
-  };
-
-  editor.deleteBackward = (...args) => {
-    const { selection } = editor;
-
-    if (selection && Range.isCollapsed(selection)) {
-      const [match] = Editor.nodes(editor, {
-        match: n =>
-          !Editor.isEditor(n) &&
-          SlateElement.isElement(n) &&
-          n.type === 'list-item',
-      });
-
-      if (match) {
-        const [, path] = match;
-        const start = Editor.start(editor, path);
-
-        if (Point.equals(selection.anchor, start)) {
-          const newProperties: Partial<CustomElement> = { type: 'paragraph' };
-          Transforms.setNodes(editor, newProperties);
-
-          // Unwrap the list if this is the last item
-          const [parent] = Editor.parent(editor, path);
-          if (SlateElement.isElement(parent) && parent.children.length === 1) {
-            Transforms.unwrapNodes(editor, {
-              match: n =>
-                !Editor.isEditor(n) &&
-                SlateElement.isElement(n) &&
-                LIST_TYPES.includes(n.type as typeof LIST_TYPES[number]),
-            });
-          }
-          return;
-        }
-      }
-    }
-
-    deleteBackward(...args);
-  };
-
-  editor.insertBreak = () => {
-    const { selection } = editor;
-
-    if (selection) {
-      const [list] = Editor.nodes(editor, {
-        match: n =>
-          !Editor.isEditor(n) &&
-          SlateElement.isElement(n) &&
-          n.type === 'list-item',
-      });
-
-      if (list) {
-        const [node] = list;
-        if (Node.string(node).length === 0) {
-          Transforms.unwrapNodes(editor, {
-            match: n =>
-              !Editor.isEditor(n) &&
-              SlateElement.isElement(n) &&
-              LIST_TYPES.includes(n.type as typeof LIST_TYPES[number]),
-            split: true,
-          });
-          const newProperties: Partial<CustomElement> = { type: 'paragraph' };
-          Transforms.setNodes(editor, newProperties);
-          return;
-        }
-
-        // Insert new list item
-        const listItem: CustomElement = {
-          type: 'list-item',
-          children: [{ text: '' }]
-        };
-
-        Transforms.insertNodes(editor, listItem);
-        return;
-      }
-    }
-
-    insertBreak();
-  };
-
-  return editor;
-};
 
 const JobDescriptionSection = () => {
   // const editor = useMemo(() => withLists(withHistory(withReact(createEditor()))), []);
@@ -269,11 +109,9 @@ const JobDescriptionSection = () => {
   };
 
   const toggleBlock = (editor: Editor, format: ElementType) => {
-    // console.log(`Toggling block type to: ${format}`); // Debugging log
     const isActive = isBlockActive(editor, format);
     const isList = LIST_TYPES.includes(format as typeof LIST_TYPES[number]);
 
-    console.log('Block active status:', isActive); // Debugging log
 
     // Unwrap existing list if needed
     Transforms.unwrapNodes(editor, {
@@ -285,14 +123,10 @@ const JobDescriptionSection = () => {
     });
 
     const newProperties: Partial<CustomElement> = {
-      // type: isActive ? 'paragraph' : isList ? 'list-item' : format,
       type: isActive ? 'paragraph' : format, // Toggle between paragraph and format
     };
 
-    console.log('Setting block type to:', newProperties.type); // Debugging log
-    // Transforms.setNodes(editor, newProperties);
-    Transforms.setNodes(editor, { type: 'code-block' });
-
+    Transforms.setNodes(editor, newProperties);
 
     if (!isActive && isList) {
       const block = { type: format, children: [] };
@@ -657,12 +491,12 @@ const JobDescriptionSection = () => {
         Job description <span className="text-red-500">*</span>
       </label>
       <div className="border border-gray-300 rounded-3xl bg-white p-4 ">
-        <Slate editor={editor} initialValue={value} onChange={handleTextChange}>
-          {/* Full Toolbar */}
+        {/* <Slate editor={editor} initialValue={value} onChange={handleTextChange}>
+          {/* Full Toolbar 
           <div className="flex flex-wrap gap-2 mb-2 border-b pb-2">
-            {/* Text Formatting */}
+            {/* Text Formatting *}
 
-            {/* Uppercase */}
+            {/* Uppercase *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -675,18 +509,18 @@ const JobDescriptionSection = () => {
             </button>
 
             {/* Bold */}
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                toggleMark(editor, 'bold');
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Bold"
-            >
-              <Icon path={mdiFormatBold} size={1} />
-            </button>
+         {/* <button
+            onMouseDown={(event) => {
+              event.preventDefault();
+              toggleMark(editor, 'bold');
+            }}
+            className="p-2 hover:bg-gray-200 rounded"
+            title="Bold"
+          >
+            <Icon path={mdiFormatBold} size={1} />
+          </button>
 
-            {/* Italic */}
+            {/* Italic *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -698,7 +532,7 @@ const JobDescriptionSection = () => {
               <Icon path={mdiFormatItalic} size={1} />
             </button>
 
-            {/* Underline */}
+            {/* Underline *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -711,7 +545,7 @@ const JobDescriptionSection = () => {
             </button>
 
 
-            {/* Add Emoji */}
+            {/* Add Emoji *
             <div className="relative">
               <button
                 onMouseDown={(event) => {
@@ -745,7 +579,7 @@ const JobDescriptionSection = () => {
             </div>
 
 
-            {/* Align Left */}
+            {/* Align Left *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -757,7 +591,7 @@ const JobDescriptionSection = () => {
               <Icon path={mdiFormatAlignLeft} size={1} />
             </button>
 
-            {/* Align Center */}
+            {/* Align Center *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -771,7 +605,7 @@ const JobDescriptionSection = () => {
 
 
 
-            {/* Align Right */}
+            {/* Align Right *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -784,8 +618,8 @@ const JobDescriptionSection = () => {
             </button>
 
 
-            {/* Lists */}
-            {/* Bulleted List */}
+            {/* Lists *
+            {/* Bulleted List *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -797,7 +631,7 @@ const JobDescriptionSection = () => {
               <Icon path={mdiFormatListBulleted} size={1} />
             </button>
 
-            {/* Numbered List */}
+            {/* Numbered List *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -809,7 +643,7 @@ const JobDescriptionSection = () => {
               <Icon path={mdiFormatListNumbered} size={1} />
             </button>
 
-            {/* Link */}
+            {/* Link *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -826,8 +660,20 @@ const JobDescriptionSection = () => {
             >
               <Icon path={mdiLink} size={1} />
             </button>
-          </div>
-
+          </div> */}
+        <Slate editor={editor} initialValue={value} onChange={handleTextChange}>
+          <TopToolbar
+            editor={editor}
+            isEmojiPickerVisible={isEmojiPickerVisible}
+            setIsEmojiPickerVisible={setIsEmojiPickerVisible}
+            handleEmojiClick={handleEmojiClick}
+            isLinkActive={isLinkActive}
+            toggleUppercase={toggleUppercase}
+            toggleMark={toggleMark}
+            toggleBlock={toggleBlock}
+            unwrapLink={unwrapLink}
+            insertLink={insertLink}
+          />
           {/* Editable Content */}
           <div className="relative">
             {isPlaceholderVisible && (
@@ -854,10 +700,22 @@ const JobDescriptionSection = () => {
 
 
 
-          {/* Bottom Toolbar */}
+          {/* Bottom Toolbar*/}
           <div className="flex flex-wrap gap-2 mt-2 border-t pt-2">
-            {/* Image */}
-            {/* Insert Image */}
+            <BottomToolbar
+              editor={editor}
+              isEmojiPickerVisible={isEmojiPickerVisible}
+              setIsEmojiPickerVisible={setIsEmojiPickerVisible}
+              handleEmojiClick={handleEmojiClick}
+              isLinkActive={isLinkActive}
+              toggleBlock={toggleBlock}
+              handleAudioRecord={handleAudioRecord}
+              handleVideoRecord={handleVideoRecord}
+              handleVideoUpload={handleVideoUpload}
+              handleImageUpload={handleImageUpload}
+            />
+            {/* Image *
+            {/* Insert Image *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -877,7 +735,7 @@ const JobDescriptionSection = () => {
             />
 
 
-            {/* Microphone */}
+            {/* Microphone *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -890,7 +748,7 @@ const JobDescriptionSection = () => {
             </button>
 
 
-            {/* Code Block */}
+            {/* Code Block *
             <button
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -903,8 +761,8 @@ const JobDescriptionSection = () => {
             </button>
 
 
-            {/* Video */}
-            {/* Insert Video */}
+            {/* Video *
+            {/* Insert Video *
             <div>
               <button
                 onMouseDown={(event) => {
@@ -933,7 +791,7 @@ const JobDescriptionSection = () => {
               >
                 <Icon path={mdiUpload} size={1} />
               </button>
-            </div>
+            </div>*/}
 
           </div>
         </Slate>
