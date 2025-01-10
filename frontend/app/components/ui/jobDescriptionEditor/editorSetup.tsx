@@ -24,7 +24,8 @@ type ElementType =
   | 'audio'
   | 'video'
   | 'code-block'
-  | 'link';
+  | 'link'
+  | 'mention';
 
 interface CustomText {
   text: string;
@@ -40,6 +41,7 @@ interface CustomElement {
   href?: string;
   align?: 'left' | 'center' | 'right';
   src?: string;
+  character?: string;
 }
 
 declare module "slate" {
@@ -55,17 +57,27 @@ const LIST_TYPES = ['numbered-list', 'bulleted-list'] as const;
 const withInlines = (editor: Editor) => {
   const { isInline, isVoid, insertBreak } = editor;
 
-  editor.isInline = element =>
-    element.type === 'link' ? true : isInline(element);
+  editor.isInline = element => {
+    return ['link', 'mention'].includes(element.type) || isInline(element);
+  }
 
   editor.isVoid = element =>
     ['image', 'video', 'audio'].includes(element.type) || isVoid(element);
 
   editor.insertBreak = () => {
     const { selection } = editor;
-    if (selection && isLinkActive(editor)) {
-      // Insert break after link
-      Transforms.move(editor);
+    if (selection) {
+      const [match] = Editor.nodes(editor, {
+        match: n =>
+          !Editor.isEditor(n) &&
+          SlateElement.isElement(n) &&
+          ['link', 'mention'].includes(n.type),
+      });
+
+      if (match) {
+        // Insert break after inline element
+        Transforms.move(editor);
+      }
     }
     insertBreak();
   };
@@ -168,6 +180,15 @@ const withLists = (editor: Editor) => {
   return editor;
 };
 
+const removeMention = (editor: Editor) => {
+  Transforms.unwrapNodes(editor, {
+    match: n => 
+      !Editor.isEditor(n) && 
+      SlateElement.isElement(n) && 
+      n.type === 'mention'
+  });
+};
+
 const isLinkActive = (editor: Editor) => {
   const [link] = Editor.nodes(editor, {
     match: n =>
@@ -190,6 +211,7 @@ export {
     withInlines,
     LIST_TYPES,
     withLists,
+    removeMention,
     isLinkActive,
     unwrapLink,
     type CustomElement,

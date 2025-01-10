@@ -1,25 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useCallback } from "react";
-import Icon from '@mdi/react';
-import {
-  mdiFormatLetterCase,
-  mdiFormatBold,
-  mdiFormatItalic,
-  mdiFormatUnderline,
-  mdiFormatAlignRight,
-  mdiFormatAlignCenter,
-  mdiFormatAlignLeft,
-  mdiFormatListBulleted,
-  mdiFormatListNumbered,
-  mdiImage,
-  mdiMicrophone,
-  mdiVideo,
-  mdiUpload,
-  mdiCodeBraces as mdiCodeBlock,
-  mdiLink
-} from '@mdi/js';
-import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
+import { EmojiClickData } from "emoji-picker-react";
 import { Slate, Editable, withReact, RenderElementProps } from "slate-react";
 import {
   Transforms,
@@ -35,6 +17,7 @@ import {
   withInlines,
   LIST_TYPES,
   withLists,
+  removeMention,
   isLinkActive,
   unwrapLink,
   type CustomElement,
@@ -47,7 +30,6 @@ const PLACEHOLDER_TEXT = "Describe the job you are trying to outsource";
 
 
 const JobDescriptionSection = () => {
-  // const editor = useMemo(() => withLists(withHistory(withReact(createEditor()))), []);
   const editor = useMemo(
     () => withInlines(withLists(withHistory(withReact(createEditor())))),
     []
@@ -65,7 +47,6 @@ const JobDescriptionSection = () => {
   const maxCharacters = 1000;
 
   const handleTextChange = (newValue: Descendant[]) => {
-    // console.log('Current editor value:', JSON.stringify(newValue, null, 2)); // Debugging log
     const plainText = newValue.map((node) => Node.string(node)).join("\n");
 
     // Check if the content is empty or just whitespace
@@ -190,8 +171,6 @@ const JobDescriptionSection = () => {
       Editor.addMark(editor, "uppercase", true);
     }
   };
-
-
 
 
   const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false); // Toggle Emoji Picker
@@ -360,16 +339,15 @@ const JobDescriptionSection = () => {
     }
   };
 
-
-
-
-
-
-
-
-
-
-
+  const insertMention = (character: string) => {
+    const mention: CustomElement = {
+      type: 'mention',
+      character,
+      children: [{ text: '' }],
+    };
+    Transforms.insertNodes(editor, mention);
+    Transforms.move(editor);
+  };
 
   interface RenderLeafProps {
     attributes: any;
@@ -408,6 +386,22 @@ const JobDescriptionSection = () => {
     const el = element as CustomElement;
 
     switch (el.type) {
+      case 'mention':
+        return (
+          <span
+            {...attributes}
+            contentEditable={false}
+            className="bg-blue-100 px-1 rounded mx-1 cursor-pointer hover:bg-blue-200"
+            onClick={() => {
+              if (window.confirm(`Remove mention @${el.character}?`)) {
+                removeMention(editor);
+              }
+            }}
+          >
+            @{el.character}
+            {children}
+          </span>
+        );
       case 'link':
         return (
           <a
@@ -483,196 +477,23 @@ const JobDescriptionSection = () => {
 
 
 
-
-
   return (
     <div className="mb-6 relative">
       <label className="block text-sm font-bold text-gray-700 mb-3">
         Job description <span className="text-red-500">*</span>
       </label>
       <div className="border border-gray-300 rounded-3xl bg-white p-4 ">
-        {/* <Slate editor={editor} initialValue={value} onChange={handleTextChange}>
-          {/* Full Toolbar 
-          <div className="flex flex-wrap gap-2 mb-2 border-b pb-2">
-            {/* Text Formatting *}
-
-            {/* Uppercase *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                toggleUppercase(editor);
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Uppercase"
-            >
-              <Icon path={mdiFormatLetterCase} size={1} />
-            </button>
-
-            {/* Bold */}
-         {/* <button
-            onMouseDown={(event) => {
-              event.preventDefault();
-              toggleMark(editor, 'bold');
-            }}
-            className="p-2 hover:bg-gray-200 rounded"
-            title="Bold"
-          >
-            <Icon path={mdiFormatBold} size={1} />
-          </button>
-
-            {/* Italic *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                toggleMark(editor, "italic");
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Italic"
-            >
-              <Icon path={mdiFormatItalic} size={1} />
-            </button>
-
-            {/* Underline *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                toggleMark(editor, "underline");
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Underline"
-            >
-              <Icon path={mdiFormatUnderline} size={1} />
-            </button>
-
-
-            {/* Add Emoji *
-            <div className="relative">
-              <button
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  setIsEmojiPickerVisible((prev) => !prev); // Toggle picker visibility
-                }}
-                className="p-2 hover:bg-gray-200 rounded"
-                title="Add Emoji"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-5 h-5"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                  <line x1="9" y1="9" x2="9.01" y2="9" />
-                  <line x1="15" y1="9" x2="15.01" y2="9" />
-                </svg>
-              </button>
-              {isEmojiPickerVisible && (
-                <div className="absolute z-50 top-full left-0 mt-2 bg-white shadow-lg rounded-md p-2">
-                  <EmojiPicker onEmojiClick={handleEmojiClick} />
-                </div>
-              )}
-            </div>
-
-
-            {/* Align Left *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                toggleBlock(editor, "align-left");
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Align Left"
-            >
-              <Icon path={mdiFormatAlignLeft} size={1} />
-            </button>
-
-            {/* Align Center *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                toggleBlock(editor, "align-center");
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Align Center"
-            >
-              <Icon path={mdiFormatAlignCenter} size={1} />
-            </button>
-
-
-
-            {/* Align Right *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                toggleBlock(editor, "align-right");
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Align Right"
-            >
-              <Icon path={mdiFormatAlignRight} size={1} />
-            </button>
-
-
-            {/* Lists *
-            {/* Bulleted List *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                toggleBlock(editor, "bulleted-list");
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Bulleted List"
-            >
-              <Icon path={mdiFormatListBulleted} size={1} />
-            </button>
-
-            {/* Numbered List *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                toggleBlock(editor, "numbered-list");
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Numbered List"
-            >
-              <Icon path={mdiFormatListNumbered} size={1} />
-            </button>
-
-            {/* Link *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                if (isLinkActive(editor)) {
-                  unwrapLink(editor);
-                } else {
-                  const url = window.prompt('Enter the URL:');
-                  if (!url) return;
-                  insertLink(editor, url);
-                }
-              }}
-              className={`p-2 hover:bg-gray-200 rounded ${isLinkActive(editor) ? 'bg-gray-200' : ''}`}
-              title="Add Link"
-            >
-              <Icon path={mdiLink} size={1} />
-            </button>
-          </div> */}
         <Slate editor={editor} initialValue={value} onChange={handleTextChange}>
           <TopToolbar
             editor={editor}
             isEmojiPickerVisible={isEmojiPickerVisible}
             setIsEmojiPickerVisible={setIsEmojiPickerVisible}
             handleEmojiClick={handleEmojiClick}
-            isLinkActive={isLinkActive}
             toggleUppercase={toggleUppercase}
             toggleMark={toggleMark}
             toggleBlock={toggleBlock}
-            unwrapLink={unwrapLink}
-            insertLink={insertLink}
+            isLinkActive={isLinkActive}
+            insertMention={insertMention}
           />
           {/* Editable Content */}
           <div className="relative">
@@ -684,7 +505,7 @@ const JobDescriptionSection = () => {
             <Editable
               renderElement={renderElement}
               renderLeaf={renderLeaf}
-              className="min-h-[200px] text-gray-700"
+              className="min-h-[200px] text-gray-700 pb-2"
               onChange={(newValue) => {
                 handleTextChange(newValue as unknown as Descendant[]); // Additional processing for text
               }}
@@ -698,10 +519,8 @@ const JobDescriptionSection = () => {
           </div>
 
 
-
-
           {/* Bottom Toolbar*/}
-          <div className="flex flex-wrap gap-2 mt-2 border-t pt-2">
+          <div className="flex flex-wrap gap-2 mt-2 border-t">
             <BottomToolbar
               editor={editor}
               isEmojiPickerVisible={isEmojiPickerVisible}
@@ -713,90 +532,12 @@ const JobDescriptionSection = () => {
               handleVideoRecord={handleVideoRecord}
               handleVideoUpload={handleVideoUpload}
               handleImageUpload={handleImageUpload}
+              unwrapLink={unwrapLink}
+              insertLink={insertLink}
             />
-            {/* Image *
-            {/* Insert Image *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                document.getElementById("image-upload-input")?.click(); // Trigger file input click
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Insert Image"
-            >
-              <Icon path={mdiImage} size={1} />
-            </button>
-            <input
-              id="image-upload-input"
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(event) => handleImageUpload(event)}
-            />
-
-
-            {/* Microphone *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                handleAudioRecord(); // Start audio recording
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Record Audio"
-            >
-              <Icon path={mdiMicrophone} size={1} />
-            </button>
-
-
-            {/* Code Block *
-            <button
-              onMouseDown={(event) => {
-                event.preventDefault();
-                toggleBlock(editor, "code-block"); // Use "code-block" type
-              }}
-              className="p-2 hover:bg-gray-200 rounded"
-              title="Insert Code Block"
-            >
-              <Icon path={mdiCodeBlock} size={1} />
-            </button>
-
-
-            {/* Video *
-            {/* Insert Video *
-            <div>
-              <button
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  handleVideoRecord(); // Start video recording
-                }}
-                className="p-2 hover:bg-gray-200 rounded"
-                title="Record Video"
-              >
-                <Icon path={mdiVideo} size={1} />
-              </button>
-              <input
-                id="video-upload-input"
-                type="file"
-                accept="video/*"
-                style={{ display: "none" }}
-                onChange={(event) => handleVideoUpload(event)}
-              />
-              <button
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  document.getElementById('video-upload-input')?.click(); // Trigger file input
-                }}
-                className="p-2 hover:bg-gray-200 rounded"
-                title="Upload Video"
-              >
-                <Icon path={mdiUpload} size={1} />
-              </button>
-            </div>*/}
-
           </div>
         </Slate>
       </div>
-
 
 
       {/* Character Counter */}
