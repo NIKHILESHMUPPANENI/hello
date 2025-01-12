@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import { useRouter } from "next/navigation"; // For navigation
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Navbar } from "../components";
+import { Navbar } from "..";
 import CustomInput from "@/components/ui/custom-input";
-import JobDescriptionSection from "./ui/jobDescriptionEditor/jobDescribtionText";
+import JobDescriptionSection from "../ui/jobDescriptionEditor/jobDescribtionText";
 
 export const FILE_DROP = "Drag & drop your company logo (format: .jpeg, .png). Max 25 MB.";
 export const PAGE_TOP = "FlowerWork will help you to create an announcement for LinkedIn to " +
@@ -15,12 +16,21 @@ export const PAGE_TOP = "FlowerWork will help you to create an announcement for 
 
 
 const PostTask = () => {
+  const router = useRouter(); // Initialize router for navigation
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [skills, setSkills] = useState<string[]>([]); // Skills array
-  const [showModal, setShowModal] = useState(false); // Toggle modal visibility
+  const [skills, setSkills] = useState<string[]>([]);
   const maxSkills = 10; // Maximum number of skills
+  const [showModal, setShowModal] = useState(false); // Toggle modal visibility
   const inputRef = useRef<HTMLInputElement>(null); // Reference to input
   const [experienceRequirements, setExperienceRequirements] = useState<string[]>(["UX/UI", "Illustration", "HTML"]);
+  const [taskTitle, setTaskTitle] = useState("Design a logo for a bakery");
+  const [companyName, setCompanyName] = useState("");
+  const [contactInfo, setContactInfo] = useState({
+    email: "",
+    phone: "",
+    website: "",
+  });
+
 
 
   const addSkill = (value: string) => {
@@ -71,6 +81,22 @@ const PostTask = () => {
     }
   };
 
+  const handlePreview = () => {
+    // Navigate to the preview page with data
+    router.push(
+      `/components/outsource/previewPost/page?` + 
+      new URLSearchParams({
+        taskTitle: taskTitle || '',
+        companyName: companyName || '',
+        skills: JSON.stringify(skills),
+        email: contactInfo.email || '',
+        phone: contactInfo.phone || '',
+        website: contactInfo.website || '',
+        logoFileName: logoFile?.name || ''
+      }).toString()
+    );
+  };
+
   return (
     <div className="w-full min-h-screen text-black">
       <header className="relative z-30 w-full">
@@ -84,7 +110,7 @@ const PostTask = () => {
 
         {/* Title Section */}
         <h1 className="text-3xl font-bold mb-4">
-          Outsource task: <em>Design a logo for a bakery</em>
+        Outsource task: <em>{taskTitle}</em>
         </h1>
 
         {/* Edit Title */}
@@ -388,10 +414,11 @@ const PostTask = () => {
 
           <Button
             className="
-          mt-2 bg-purple-500 hover:bg-purple-600 
-          text-white flex items-center gap-2 
-          px-4 py-2 rounded-full shadow hover:shadow-md
-           sm:w-auto">
+              mt-2 bg-purple-500 hover:bg-purple-600 
+              text-white flex items-center gap-2 
+              px-4 py-2 rounded-full shadow hover:shadow-md
+              sm:w-auto"
+            onClick={handlePreview}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"

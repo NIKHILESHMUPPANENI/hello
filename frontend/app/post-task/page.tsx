@@ -1,5 +1,5 @@
 import React from "react";
-import PostTask from "../components/outsource";
+import PostTask from "../components/outsource/outsource";
 
 export default function PostTaskPage() {
   return (
