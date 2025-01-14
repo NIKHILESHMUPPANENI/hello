@@ -1,12 +1,16 @@
-use actix_web::{get, post, web, HttpResponse, Responder, ResponseError};
+use actix_service::boxed::service;
+use actix_web::{get, patch, post, web, HttpResponse, Responder, ResponseError};
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use crate::database::error::DatabaseError;
 use crate::handlers::error::ApiError;
+use crate::models::task::{Priority, Progress, Task};
+use crate::models::task_assignee::TaskWithAssignedUsers;
 use crate::models::user::UserSub;
 use crate::run_async_query;
+use crate::schema::task_assignees;
 use crate::schema::tasks::dsl::tasks;
 use crate::services::task_service;
 use crate::services::user_service::get_user_id_by_email;
@@ -20,6 +24,18 @@ pub struct CreateTaskRequest {
     title:String,
     due_date: Option<String>,
 }
+#[derive(Serialize, Deserialize)]
+pub struct UpdateTaskRequest {
+    pub description: Option<String>,
+    pub reward: Option<i64>,
+    pub completed: Option<bool>,
+    pub title: Option<String>,
+    pub progress: Option<Progress>,
+    pub priority: Option<Priority>,
+    pub due_date: Option<String>, 
+    pub assigned_users: Option<Vec<i32>>, 
+}
+
 
 pub fn task_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -28,7 +44,8 @@ pub fn task_routes(cfg: &mut web::ServiceConfig) {
             .service(get_tasks)
             .service(get_task_by_id)
             .service(get_tasks)
-            .service(create_task),
+            .service(create_task)
+            .service(update_task),
     );
 }
 
@@ -50,7 +67,6 @@ pub async fn create_task(
             user_id,
             &task.title,
             task.due_date.clone()
-            // task.due_date
         ).map_err(DatabaseError::from)
     })?;
     Ok::<HttpResponse, ApiError>(HttpResponse::Created().json(create_task))
@@ -82,6 +98,38 @@ pub async fn get_task_by_id(
     })?;
     Ok::<HttpResponse, ApiError>(HttpResponse::Ok().json(task))
 }
+
+#[patch("/{id}")]
+pub async fn update_task(
+    pool: web::Data<DbPool>,
+    id: web::Path<i32>,
+    task_update: web::Json<UpdateTaskRequest>,
+    user_sub: UserSub,
+) -> Result<impl Responder, impl ResponseError> {
+    let updated_task = run_async_query!(pool, |conn: &mut diesel::PgConnection| {
+        let user_id = get_user_id_by_email(&user_sub.0, conn).map_err(DatabaseError::from)?;
+
+        // Update the task and assigned users
+        let task_with_users = task_service::update_task(
+            conn,
+            id.into_inner(),
+            &user_id,
+            task_update.description.as_deref(),
+            task_update.reward,
+            task_update.completed,
+            task_update.title.as_deref(),
+            task_update.progress,
+            task_update.priority,
+            task_update.due_date.clone(),
+            task_update.assigned_users.clone(),
+        )
+        .map_err(DatabaseError::from)?;
+
+        Ok::<TaskWithAssignedUsers, DatabaseError>(task_with_users)
+    })?;
+    Ok::<HttpResponse, ApiError>(HttpResponse::Ok().json(updated_task))
+}
+
 
 #[cfg(test)]
 mod tests {

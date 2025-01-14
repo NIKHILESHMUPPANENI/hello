@@ -3,7 +3,9 @@ use diesel::prelude::*;
 use diesel::result::Error;
 
 use crate::models::task::{NewTask, Priority, Progress, SubTask, Task, TaskWithSubTasks};
+use crate::models::task_assignee::{TaskAssignee, TaskWithAssignedUsers};
 use crate::schema::tasks::{self};
+use crate::schema::users;
 
 
 pub fn create_task(
@@ -69,6 +71,73 @@ pub(crate) fn get_task_by_id(
         })
     // Ok(task)
 }
+
+
+pub fn update_task(
+    conn: &mut PgConnection,
+    task_id: i32,
+    user_id: &i32,
+    description: Option<&str>,
+    reward: Option<i64>,
+    completed: Option<bool>,
+    title: Option<&str>,
+    progress: Option<Progress>,
+    priority: Option<Priority>,
+    due_date: Option<String>,
+    assigned_users: Option<Vec<i32>>,
+) -> QueryResult<TaskWithAssignedUsers> {
+    use crate::schema::{tasks, task_assignees};
+
+    
+    conn.transaction(|conn| {
+        // Update the main task details
+        let updated_task = diesel::update(tasks::table.filter(tasks::id.eq(task_id).and(tasks::user_id.eq(user_id))))
+            .set((
+                description.map(|desc| tasks::description.eq(desc)),
+                reward.map(|rew| tasks::reward.eq(rew)),
+                completed.map(|comp| tasks::completed.eq(comp)),
+                title.map(|t| tasks::title.eq(t)),
+                progress.map(|prog| tasks::progress.eq(prog)),
+                priority.map(|pri| tasks::priority.eq(pri)),
+                due_date.map(|date| {
+                    let parsed_date = chrono::NaiveDate::parse_from_str(&date, "%d-%m-%Y").ok();
+                    parsed_date.and_then(|d| d.and_hms_opt(0, 0, 0))
+                }).map(|dt| tasks::due_date.eq(dt)),
+            ))
+            .get_result::<Task>(conn)?;
+
+        // Update assigned users if provided
+        if let Some(users) = assigned_users {
+            // Remove existing assignments
+            diesel::delete(task_assignees::table.filter(task_assignees::task_id.eq(task_id)))
+                .execute(conn)?;
+
+            // Add new assignments
+            let new_assignments: Vec<_> = users
+                .into_iter()
+                .map(|user_id| (task_assignees::task_id.eq(task_id), task_assignees::user_id.eq(user_id)))
+                .collect();
+
+            diesel::insert_into(task_assignees::table)
+                .values(new_assignments)
+                .execute(conn)?;
+        }
+                // Query assigned users
+        let assigned_users_query = task_assignees::table
+            .inner_join(users::table)
+            .filter(task_assignees::task_id.eq(task_id))
+            .select(users::id)
+            .load::<i32>(conn)?;
+
+        Ok(TaskWithAssignedUsers {
+            task: updated_task,
+            assigned_users: assigned_users_query,
+        })
+    })
+        // Ok(updated_task)
+   
+}
+
 
 #[cfg(test)]
 mod tests {
