@@ -278,4 +278,101 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::CREATED);
     }
+    
+    #[actix_rt::test]
+async fn test_update_task_success() {
+    let db = TestDb::new();
+    let pool = db::establish_connection(&db.url());
+    dotenv::dotenv().ok();
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(pool.clone()))
+            .configure(auth_routes)
+            .configure(task_routes),
+    )
+    .await;
+
+    // Create test user
+    let user = register_user(
+        &mut db.conn(),
+        "test user",
+        "testpassword",
+        "test@email.com",
+    )
+    .expect("Failed to register user");
+
+    // Create test project
+    let project = create_project(
+        &mut db.conn(),
+        "test project",
+        "test project description",
+        &user.id,
+    )
+    .expect("Failed to create project");
+
+    // Create initial task
+    let task = task_service::create_task(
+        &mut db.conn(),
+        "initial description",
+        100,
+        project.id,
+        user.id,
+        "initial title",
+        None,
+    )
+    .expect("Failed to create task");
+
+    // Login to get auth token
+    let log_req = test::TestRequest::post()
+        .uri("/auth/login")
+        .set_json(&LoginRequest {
+            email: "test@email.com".to_string(),
+            password: "testpassword".to_string(),
+        })
+        .to_request();
+
+    let log_resp = test::call_service(&app, log_req).await;
+    assert_eq!(log_resp.status(), StatusCode::OK);
+
+    let auth_header = log_resp
+        .headers()
+        .get("Authorization")
+        .expect("No authorization header")
+        .to_str()
+        .expect("Failed to convert header to string");
+
+    // Update task request
+    let update_req = test::TestRequest::patch()
+        .uri(&format!("/tasks/{}", task.id)) // Use the task's ID for patching
+        .append_header(("Authorization", auth_header))
+        .set_json(&UpdateTaskRequest {
+            description: Some("updated description".to_string()),
+            reward: Some(200),
+            completed: Some(true),
+            title: Some("updated title".to_string()),
+            progress: Some(Progress::Completed),
+            priority: Some(Priority::High),
+            due_date: Some("26-12-2024".to_string()),
+            assigned_users: Some(vec![]),
+        })
+        .to_request();
+
+    let resp = test::call_service(&app, update_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Verify the update in database
+    let updated_task: TaskWithAssignedUsers = test::read_body_json(resp).await;
+
+    // Check task fields
+    assert_eq!(updated_task.task.description, "updated description");
+    assert_eq!(updated_task.task.reward, 200);
+    assert_eq!(updated_task.task.completed, true);
+    assert_eq!(updated_task.task.title, "updated title");
+    assert_eq!(updated_task.task.progress, Progress::Completed);
+    assert_eq!(updated_task.task.priority, Priority::High);
+    
+    // Check assigned users (should be empty in this case)
+    assert!(updated_task.assigned_users.is_empty());
+}
 }
