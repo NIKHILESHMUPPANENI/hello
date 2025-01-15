@@ -28,8 +28,11 @@ import { TopToolbar, BottomToolbar } from './toolBar';
 
 const PLACEHOLDER_TEXT = "Describe the job you are trying to outsource";
 
+interface JobDescriptionSectionProps {
+  onDescriptionChange: (description: string) => void;
+}
 
-const JobDescriptionSection = () => {
+const JobDescriptionSection: React.FC<JobDescriptionSectionProps> = ({ onDescriptionChange }) => {
   const editor = useMemo(
     () => withInlines(withLists(withHistory(withReact(createEditor())))),
     []
@@ -53,6 +56,7 @@ const JobDescriptionSection = () => {
     if (plainText.trim() === "") {
       setIsPlaceholderVisible(true);
       setValue([{ type: "paragraph", children: [{ text: "" }] }] as Descendant[]);
+      onDescriptionChange(""); // Add this to update parent when empty
       return;
     }
 
@@ -60,6 +64,7 @@ const JobDescriptionSection = () => {
     if (plainText.length <= maxCharacters) {
       setIsPlaceholderVisible(false);
       setValue(newValue);
+      onDescriptionChange(plainText); // Send plain text to parent
       return;
     }
 
@@ -69,6 +74,7 @@ const JobDescriptionSection = () => {
     }
 
     setValue(value);
+    onDescriptionChange(plainText); // Send plain text to parent
   };
 
 
@@ -85,7 +91,6 @@ const JobDescriptionSection = () => {
           n.type === format,
       })
     );
-    console.log('Active block match:', match); // Debugging log
     return !!match;
   };
 

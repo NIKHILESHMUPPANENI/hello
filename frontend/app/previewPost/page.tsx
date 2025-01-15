@@ -1,20 +1,34 @@
 "use client";
 
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Navbar } from "../components";
 
 const PreviewPost = () => {
-    const searchParams = useSearchParams();
-    
-    const taskTitle = searchParams.get('taskTitle');
-    const companyName = searchParams.get('companyName');
-    const skills = searchParams.get('skills');
-    const email = searchParams.get('email');
-    const phone = searchParams.get('phone');
-    const website = searchParams.get('website');
-    const logoFileName = searchParams.get('logoFileName');
+  const searchParams = useSearchParams();
+  const [logoData, setLogoData] = useState('');
+  const taskTitle = searchParams.get('taskTitle');
+  const companyName = searchParams.get('companyName');
+  const skills = searchParams.get('skills');
+  const email = searchParams.get('email');
+  const phone = searchParams.get('phone');
+  const website = searchParams.get('website');
+  const logoFileName = searchParams.get('logoFileName');
   
-    // Parse skills safely
-    const parsedSkills = skills ? JSON.parse(skills) as string[] : [];
+  const jobDescription = searchParams.get('jobDescription');
+
+  // Parse skills safely
+  const parsedSkills = skills ? JSON.parse(skills) as string[] : [];
+
+  useEffect(() => {
+    // Get logo data from localStorage
+    const tempLogoData = localStorage.getItem('tempLogoData');
+    if (tempLogoData) {
+      setLogoData(tempLogoData);
+      // Clean up
+      localStorage.removeItem('tempLogoData');
+    }
+  }, []);
 
   return (
     <div className="w-full min-h-screen bg-gray-100 text-black">
@@ -28,6 +42,24 @@ const PreviewPost = () => {
         {/* Company Name */}
         <h2 className="text-xl font-semibold mb-4">Company Name</h2>
         <p className="text-lg mb-6">{companyName || 'N/A'}</p>
+
+        {/* Logo */}
+        {logoData && (
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-4">Company Logo</h2>
+            <div className="w-48 h-48 relative">
+              <img 
+                src={logoData}
+                alt="Company Logo"
+                className="object-contain w-full h-full rounded-md"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Job Description */}
+        <h2 className="text-xl font-semibold mb-4">Job Description</h2>
+        <p className="text-lg whitespace-pre-wrap">{jobDescription || 'N/A'}</p>
 
         {/* Skills */}
         <h2 className="text-xl font-semibold mb-4">Required Skills</h2>

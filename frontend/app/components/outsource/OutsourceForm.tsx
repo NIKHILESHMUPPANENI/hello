@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation"; // For navigation
+import { createContext, useContext } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Navbar } from "..";
@@ -13,7 +14,13 @@ export const PAGE_TOP = "FlowerWork will help you to create an announcement for 
   "find the right talent. You can post in both Personal and FlowerWork's " +
   "LinkedIn accounts.";
 
-
+  export const LogoContext = createContext<{
+    logoData: string;
+    setLogoData: (data: string) => void;
+  }>({
+    logoData: '',
+    setLogoData: () => {},
+  });
 
 const PostTask = () => {
   const router = useRouter(); // Initialize router for navigation
@@ -23,13 +30,15 @@ const PostTask = () => {
   const [showModal, setShowModal] = useState(false); // Toggle modal visibility
   const inputRef = useRef<HTMLInputElement>(null); // Reference to input
   const [experienceRequirements, setExperienceRequirements] = useState<string[]>(["UX/UI", "Illustration", "HTML"]);
-  const [taskTitle, setTaskTitle] = useState("Design a logo for a bakery");
+  const [taskTitle, setTaskTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [contactInfo, setContactInfo] = useState({
     email: "",
     phone: "",
     website: "",
   });
+  const [jobDescription, setJobDescription] = useState("");
+  
 
 
 
@@ -81,21 +90,65 @@ const PostTask = () => {
     }
   };
 
-  const handlePreview = () => {
-    // Navigate to the preview page with data
-    router.push(
-      `/components/outsource/previewPost/page?` + 
-      new URLSearchParams({
-        taskTitle: taskTitle || '',
-        companyName: companyName || '',
-        skills: JSON.stringify(skills),
-        email: contactInfo.email || '',
-        phone: contactInfo.phone || '',
-        website: contactInfo.website || '',
-        logoFileName: logoFile?.name || ''
-      }).toString()
-    );
+
+  const handleJobDescriptionChange = (description: string) => {
+    setJobDescription(description);
   };
+
+  const handlePreview = async () => {
+    try {
+      let logoData = '';
+      if (logoFile) {
+        // Convert file to base64 but don't include in URL params
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          logoData = reader.result as string;
+          // Store in context or localStorage
+          localStorage.setItem('tempLogoData', logoData);
+        };
+        reader.readAsDataURL(logoFile);
+      }
+
+    // Ensure all form data is captured
+    const formData = {
+      taskTitle: taskTitle || '',
+      companyName: companyName || '',
+      skills: JSON.stringify(skills || []),
+      email: contactInfo?.email || '',
+      phone: contactInfo?.phone || '',
+      website: contactInfo?.website || '',
+      logoFileName: logoFile?.name || '',
+      jobDescription: jobDescription || ''
+    };
+
+    const queryParams = new URLSearchParams(formData);
+    router.push(`/previewPost?${queryParams.toString()}`);
+  } catch (error) {
+    console.error('Error preparing preview:', error);
+  }
+};
+
+  // Update form handlers to ensure state updates
+  const updateTaskTitle = (value: string) => {
+    console.log('Updating task title:', value);
+    setTaskTitle(value);
+  };
+
+  const updateCompanyName = (value: string) => {
+    console.log('Updating company name:', value);
+    setCompanyName(value);
+  };
+
+  const updateContactInfo = (field: keyof typeof contactInfo, value: string) => {
+    setContactInfo(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  useEffect(() => {
+
+  }, [taskTitle, companyName, skills, contactInfo, logoFile, jobDescription]);
 
   return (
     <div className="w-full min-h-screen text-black">
@@ -110,17 +163,19 @@ const PostTask = () => {
 
         {/* Title Section */}
         <h1 className="text-3xl font-bold mb-4">
-        Outsource task: <em>{taskTitle}</em>
+          Outsource task: <em>{taskTitle}</em>
         </h1>
 
         {/* Edit Title */}
         <div className="mb-6">
           <label className="block text-sm font-bold text-gray-700 mb-2">
-            Edit title of outsourced task (Current title: "Design a logo for a bakery")
+            Edit title of outsourced task (Current title: "<em>{taskTitle}</em>")
           </label>
           <CustomInput
+            value={taskTitle}
+            onChange={(e) => updateTaskTitle(e.target.value)}
             placeholder="Edit the title of the task here"
-            rows={2} // Multi-line input
+            rows={2}
             className="border-gray-300 rounded-md"
           />
         </div>
@@ -131,8 +186,10 @@ const PostTask = () => {
             Title of your company
           </label>
           <CustomInput
+            value={companyName}
+            onChange={(e) => updateCompanyName(e.target.value)}
             placeholder="Type your company name here"
-            rows={2} // Multi-line input
+            rows={2}
             className="border-gray-300 rounded-md"
           />
         </div>
@@ -148,7 +205,7 @@ const PostTask = () => {
           >
             <Input
               type="file"
-              accept=".pdf,.doc,.docx"
+              accept="image/jpeg,image/png,image/jpg"
               id="logo"
               className="hidden"
               onChange={(e) => {
@@ -205,7 +262,7 @@ const PostTask = () => {
         </div>
 
         {/* Job Description */}
-        <JobDescriptionSection />
+        <JobDescriptionSection onDescriptionChange={handleJobDescriptionChange} />
 
 
         {/* Skills Section */}
@@ -365,18 +422,24 @@ const PostTask = () => {
           <div className="flex flex-col gap-4"> {/* Stack inputs vertically */}
             <CustomInput
               type="email"
+              value={contactInfo.email}
+              onChange={(e) => updateContactInfo('email', e.target.value)}
               placeholder="Enter contact email *"
               className="w-full p-2 text-sm border-gray-300 rounded-md"
               required
-            /> 
+            />
             <CustomInput
               type="tel"
+              value={contactInfo.phone}
+              onChange={(e) => updateContactInfo('phone', e.target.value)}
               placeholder="Enter contact phone number *"
               className="w-full p-2 text-sm border-gray-300 rounded-md"
               required
-            /> 
+            />
             <CustomInput
               type="url"
+              value={contactInfo.website}
+              onChange={(e) => updateContactInfo('website', e.target.value)}
               placeholder="Company website URL"
               className="w-full p-2 text-sm border-gray-300 rounded-md"
             />

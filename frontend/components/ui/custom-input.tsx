@@ -2,38 +2,48 @@
 
 import React, { useState, useEffect } from "react";
 
-const CustomInput = ({
+interface CustomInputProps {
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  placeholder: string;
+  type?: string;
+  className?: string;
+  rows?: number;
+  required?: boolean;
+}
+
+const CustomInput: React.FC<CustomInputProps> = ({
+  value: externalValue,
+  onChange: externalOnChange,
   placeholder,
   type = "text",
   className = "",
   rows,
   required = false,
-}: {
-  placeholder: string;
-  type?: string;
-  className?: string;
-  rows?: number; // Optional rows prop for multi-line input
-  required?: boolean; // Optional required prop
 }) => {
   const [isFocused, setIsFocused] = useState(false);
-  const [value, setValue] = useState("");
+  const [internalValue, setInternalValue] = useState(externalValue || "");
 
   const handleFocus = () => setIsFocused(true);
   const handleBlur = () => setIsFocused(false);
+  
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setValue(e.target.value);
+    if (externalOnChange) {
+      externalOnChange(e);
+    }
+    setInternalValue(e.target.value);
   };
 
   const getBackgroundColor = () => {
     if (isFocused) return "#FFFFFF"; // Active background
-    if (!isFocused && value.trim() !== "") return "#FFFFFF"; // Filled background
-    if (isFocused && !value.trim()) return "#F3F3F6"; // On click background
+    if (!isFocused && internalValue.trim() !== "") return "#FFFFFF"; // Filled background
+    if (isFocused && !internalValue.trim()) return "#F3F3F6"; // On click background
     return "#EAEAED"; // Default or hover background
   };
 
   const getBorderColor = () => {
     if (isFocused) return "#181615"; // Active border
-    if (value.trim()) return "#171929"; // Filled border
+    if (internalValue.trim()) return "#171929"; // Filled border
     return "#B055CC"; // Hover and click border
   };
 
@@ -48,21 +58,22 @@ const CustomInput = ({
   };
 
   useEffect(() => {
-    // Ensure consistent initial state between server and client
-    setValue(value);
-  }, []);
+    if (externalValue !== undefined) {
+      setInternalValue(externalValue);
+    }
+  }, [externalValue]);
 
   if (rows) {
     return (
       <textarea
         placeholder={placeholder}
         rows={rows}
-        value={value}
+        value={externalValue !== undefined ? externalValue : internalValue}
         onFocus={handleFocus}
         onBlur={handleBlur}
         onChange={handleChange}
-        style={baseStyles} // Inline styles
-        className={`resize-vertical w-full ${className}`} // External styles
+        style={baseStyles}
+        className={`resize-vertical w-full ${className}`}
         required={required}
       />
     );
@@ -72,12 +83,12 @@ const CustomInput = ({
     <input
       type={type}
       placeholder={placeholder}
-      value={value}
+      value={externalValue !== undefined ? externalValue : internalValue}
       onFocus={handleFocus}
       onBlur={handleBlur}
       onChange={handleChange}
-      style={baseStyles} // Inline styles
-      className={`w-full ${className}`} // External styles
+      style={baseStyles}
+      className={`w-full ${className}`}
       required={required}
     />
   );
