@@ -1,5 +1,5 @@
 use actix_service::boxed::service;
-use actix_web::{get, patch, post, web, HttpResponse, Responder, ResponseError};
+use actix_web::{delete, get, patch, post, web, HttpResponse, Responder, ResponseError};
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -45,7 +45,8 @@ pub fn task_routes(cfg: &mut web::ServiceConfig) {
             .service(get_task_by_id)
             .service(get_tasks)
             .service(create_task)
-            .service(update_task),
+            .service(update_task)
+            .service(delete_task),
     );
 }
 
@@ -128,6 +129,23 @@ pub async fn update_task(
         Ok::<TaskWithAssignedUsers, DatabaseError>(task_with_users)
     })?;
     Ok::<HttpResponse, ApiError>(HttpResponse::Ok().json(updated_task))
+}
+
+#[delete("/{id}")]
+pub async fn delete_task(
+    pool: web::Data<DbPool>,
+    id: web::Path<i32>,
+    user_sub: UserSub,
+) -> Result<impl Responder, impl ResponseError> {
+    // Delete the task within a database transaction
+    run_async_query!(pool, |conn: &mut diesel::PgConnection| {
+        // Get the user ID from their email
+        let user_id = get_user_id_by_email(&user_sub.0, conn).map_err(DatabaseError::from)?;
+        
+        // Call the service to delete the task if the user is the owner
+        task_service::delete_task(conn, id.into_inner(), &user_id).map_err(DatabaseError::from)
+    })?;
+    Ok::<HttpResponse, ApiError>(HttpResponse::NoContent().finish())
 }
 
 
@@ -374,5 +392,84 @@ async fn test_update_task_success() {
     
     // Check assigned users (should be empty in this case)
     assert!(updated_task.assigned_users.is_empty());
+}
+
+#[actix_rt::test]
+async fn test_delete_task_success() {
+    let db = TestDb::new();
+    let pool = db::establish_connection(&db.url());
+    dotenv::dotenv().ok();
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(pool.clone()))
+            .configure(auth_routes)
+            .configure(task_routes),
+    )
+    .await;
+
+    let user = register_user(
+        &mut db.conn(),
+        "test user",
+        "testpassword",
+        "test@email.com",
+    )
+    .expect("Failed to register user");
+
+    // Create a project and task
+    let project = create_project(
+        &mut db.conn(),
+        "test project",
+        "test project description",
+        &user.id,
+    )
+    .expect("Failed to create project");
+
+    let task = task_service::create_task(
+        &mut db.conn(),
+        "initial description",
+        100,
+        project.id,
+        user.id,
+        "initial title",
+        None,
+    )
+    .expect("Failed to create task");
+
+    let log_req = test::TestRequest::post()
+        .uri("/auth/login")
+        .set_json(&LoginRequest {
+            email: "test@email.com".to_string(),
+            password: "testpassword".to_string(),
+        })
+        .to_request();
+
+    let log_resp = test::call_service(&app, log_req).await;
+    assert_eq!(log_resp.status(), StatusCode::OK);
+
+    let auth_header = log_resp
+        .headers()
+        .get("Authorization")
+        .expect("No authorization header")
+        .to_str()
+        .expect("Failed to convert header to string");
+
+    // Delete the task
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/tasks/{}", task.id))
+        .append_header(("Authorization", auth_header))
+        .to_request();
+
+    let delete_resp = test::call_service(&app, delete_req).await;
+    assert_eq!(delete_resp.status(), StatusCode::NO_CONTENT);
+
+    // Verify the task is deleted
+    let task_check = task_service::get_task_by_id(&mut db.conn(), task.id, &user.id);
+        // .filter(id.eq(task.id))
+        // .first::<Task>(&mut db.conn())
+        // .optional()
+        // .expect("Failed to query task");
+
+    assert!(task_check.is_err()); 
 }
 }

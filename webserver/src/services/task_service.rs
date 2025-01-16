@@ -4,8 +4,8 @@ use diesel::result::Error;
 
 use crate::models::task::{NewTask, Priority, Progress, SubTask, Task, TaskWithSubTasks};
 use crate::models::task_assignee::{TaskAssignee, TaskWithAssignedUsers};
-use crate::schema::tasks::{self};
-use crate::schema::users;
+use crate::schema::{tasks, users};
+use crate::schema::tasks::dsl::{id,user_id as task_user_id};
 
 
 pub fn create_task(
@@ -138,6 +138,26 @@ pub fn update_task(
    
 }
 
+pub fn delete_task(
+    conn: &mut PgConnection,
+    task_id: i32,
+    user_id: &i32,
+) -> Result<(), Error> {
+    // Check if the user is the creator of the task
+    let task_creator_id: Option<i32> = crate::schema::tasks::table
+        .filter(id.eq(task_id))
+        .select(task_user_id)
+        .first(conn)?;
+
+    if task_creator_id != Some(*user_id) {
+        return Err(Error::NotFound); // Return error if not the creator
+    }
+
+    // Delete the task
+    diesel::delete(crate::schema::tasks::table.filter(id.eq(task_id))).execute(conn)?;
+
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
@@ -335,6 +355,65 @@ mod tests {
         let expected_due_date = NaiveDateTime::parse_from_str("15-03-2025 00:00:00", "%d-%m-%Y %H:%M:%S")
         .unwrap();
     assert_eq!(updated_task.task.due_date.unwrap(), expected_due_date);
+}
+
+#[test]
+fn test_delete_task() {
+    let db = TestDb::new();
+    
+    let reward = 100;
+    let title = "test title";
+    let due_date = None;
+
+    let user_id = register_user(
+        &mut db.conn(),
+        "test user",
+        "testpassword",
+        "test@test.com",
+    )
+    .expect("Failed to register user")
+    .id;
+
+    let project_id = create_project(&mut db.conn(), "test project", "100", &user_id)
+        .expect("Failed to create project")
+        .id;
+
+    // Create a task to be deleted
+    let task = create_task(
+        &mut db.conn(),
+        "task to delete",
+        reward,
+        project_id,
+        user_id,
+        title,
+        due_date,
+    )
+    .expect("Failed to create task");
+
+    // Verify the task exists before deletion
+    let fetched_task = crate::schema::tasks::table
+        .find(task.id)
+        .first::<Task>(&mut db.conn());
+    assert!(
+        fetched_task.is_ok(),
+        "Task should exist before deletion"
+    );
+
+    // Delete the task
+    let delete_result = delete_task(&mut db.conn(), task.id, &user_id);
+    assert!(
+        delete_result.is_ok(),
+        "Task deletion failed when it should have succeeded"
+    );
+
+    // Verify the task no longer exists
+    let fetched_task_after_delete = crate::schema::tasks::table
+        .find(task.id)
+        .first::<Task>(&mut db.conn());
+    assert!(
+        fetched_task_after_delete.is_err(),
+        "Task should not exist after deletion"
+    );
 }
 
 }
