@@ -1,20 +1,15 @@
-use actix_service::boxed::service;
 use actix_web::{delete, get, patch, post, web, HttpResponse, Responder, ResponseError};
 
-use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
-use crate::database::error::DatabaseError;
 use crate::handlers::error::ApiError;
-use crate::models::task::{Priority, Progress, Task};
-use crate::models::task_assignee::TaskWithAssignedUsers;
+use crate::tasks::task_assignee::TaskWithAssignedUsers;
 use crate::models::user::UserSub;
 use crate::run_async_query;
-use crate::schema::task_assignees;
-use crate::schema::tasks::dsl::tasks;
-use crate::services::task_service;
 use crate::services::user_service::get_user_id_by_email;
+use crate::tasks::task_service;
 use crate::{auth::auth_middleware, db::DbPool};
+use super::enums::{Priority, Progress};
 
 #[derive(Serialize, Deserialize)]
 pub struct CreateTaskRequest {

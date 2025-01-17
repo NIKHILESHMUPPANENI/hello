@@ -4,7 +4,7 @@ use diesel::{
 };
 
 use crate::models::project::Project;
-use crate::models::task::Task;
+use crate::tasks::task::Task;
 use crate::{models::project::NewProject, schema, schema::projects};
 
 pub fn create_project(
@@ -58,8 +58,8 @@ pub fn get_project_by_id(conn: &mut PgConnection, project_id: &i32) -> Result<Pr
 
 mod tests {
     use crate::database::test_db::TestDb;
-    use crate::services::task_service::create_task;
     use crate::services::user_service::register_user;
+    use crate::tasks::task_service::create_task;
 
     use super::*;
 

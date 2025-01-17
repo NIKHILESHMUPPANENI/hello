@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{models::{task::Task, user::User}, schema::task_assignees};
+use crate::{models::user::User, schema::task_assignees, tasks::task::Task};
 
 #[derive(Insertable, Associations, Identifiable, Queryable, Debug)]
 #[diesel(table_name = task_assignees)]
@@ -12,6 +12,12 @@ pub struct TaskAssignee {
     pub task_id: i32,
     pub user_id: i32,
     pub assigned_at: Option<chrono::NaiveDateTime>, 
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TaskWithAssignees {
+    pub task: Task,
+    pub assignees: Vec<User>,
 }
 
 #[derive(Insertable)]

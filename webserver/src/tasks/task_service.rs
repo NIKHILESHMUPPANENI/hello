@@ -2,10 +2,14 @@ use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::result::Error;
 
-use crate::models::task::{NewTask, Priority, Progress, SubTask, Task, TaskWithSubTasks};
-use crate::models::task_assignee::{TaskAssignee, TaskWithAssignedUsers};
+use crate::tasks::task::{NewTask, Task};
 use crate::schema::{tasks, users};
 use crate::schema::tasks::dsl::{id,user_id as task_user_id};
+
+use super::enums::{Priority, Progress};
+use super::herlpers::{validate_created_at, validate_due_date};
+use super::sub_tasks::{SubTask, TaskWithSubTasks};
+use super::task_assignee::TaskWithAssignedUsers;
 
 
 pub fn create_task(
@@ -15,12 +19,14 @@ pub fn create_task(
     project_id: i32,
     user_id: i32,
     title: &str,
+    // created_at:Option<String>,
     due_date: Option<String>
 ) -> Result<Task, Error> {
 
     let parsed_due_date = due_date.and_then(|date_str| {
         NaiveDateTime::parse_from_str(&format!("{} 00:00:00", date_str), "%d-%m-%Y %H:%M:%S").ok()
     });
+
 
     let new_task = NewTask {
         description,
@@ -38,7 +44,7 @@ pub fn create_task(
         .values(&new_task)
         .returning(Task::as_returning())
         .get_result(conn);
-    return some;
+    return some
 }
 
 pub(crate) fn get_tasks(conn: &mut PgConnection, users_id: &i32) -> Result<Vec<Task>, Error> {
@@ -161,6 +167,8 @@ pub fn delete_task(
 
 #[cfg(test)]
 mod tests {
+    use tasks::created_at;
+
     use crate::database::test_db::TestDb;
     use crate::services::project_service::create_project;
     use crate::services::user_service::register_user;
@@ -174,6 +182,7 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title : &str= "Test Title";
+        // let created_at = Some("01-12-2024".to_string());
         let due_date = Some("25-12-2024".to_string());
 
         let user_id = register_user(
@@ -202,6 +211,7 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title = "Title test";
+        // let created_at = Utc::now().naive_utc();
         let due_date = None;
 
 
@@ -236,6 +246,7 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title = "title test";
+        // let created_at = None;
         let due_date = Some("25-12-2024".to_string());
 
 
@@ -272,6 +283,7 @@ mod tests {
 
         let reward = 100;
         let title = "test title";
+        // let created_at = Utc::now().naive_utc();
         let due_date =None;
 
         
@@ -318,6 +330,7 @@ mod tests {
         let db = TestDb::new();
          let reward = 100;
         let title = "test title";
+        // let created_at = Utc::now().naive_utc();
         let due_date =None;
         
         let user_id = register_user(
@@ -363,6 +376,7 @@ fn test_delete_task() {
     
     let reward = 100;
     let title = "test title";
+    // let created_at = "01-01-2025";
     let due_date = None;
 
     let user_id = register_user(
@@ -386,6 +400,7 @@ fn test_delete_task() {
         project_id,
         user_id,
         title,
+        // created_at,
         due_date,
     )
     .expect("Failed to create task");
