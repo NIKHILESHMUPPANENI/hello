@@ -30,14 +30,22 @@ const PLACEHOLDER_TEXT = "Describe the job you are trying to outsource";
 
 interface JobDescriptionSectionProps {
   onDescriptionChange: (description: string) => void;
+  onMediaContentChange: (media: MediaContent[]) => void;
+}
+interface MediaContent {
+  type: 'image' | 'video' | 'audio';
+  src: string;
 }
 
-const JobDescriptionSection: React.FC<JobDescriptionSectionProps> = ({ onDescriptionChange }) => {
+const JobDescriptionSection: React.FC<JobDescriptionSectionProps> = ({
+  onDescriptionChange,
+  onMediaContentChange }) => {
   const editor = useMemo(
     () => withInlines(withLists(withHistory(withReact(createEditor())))),
     []
   );
 
+  const [mediaContent, setMediaContent] = useState<MediaContent[]>([]);
   const [value, setValue] = useState<Descendant[]>([
     {
       type: "paragraph" as const,
@@ -201,19 +209,27 @@ const JobDescriptionSection: React.FC<JobDescriptionSectionProps> = ({ onDescrip
   const insertImage = (editor: Editor, src: string) => {
     const image: CustomElement = {
       type: 'image',
-      src, // Base64 string or URL
-      children: [{ text: '' }], // Empty children to satisfy Slate's requirements
+      src,
+      children: [{ text: '' }],
     };
     Transforms.insertNodes(editor, image);
+    // Add to media content
+    const newMedia: MediaContent = { type: 'image', src };
+    setMediaContent(prev => [...prev, newMedia]);
+    onMediaContentChange([...mediaContent, newMedia]);
   };
 
   const insertAudio = (editor: Editor, src: string) => {
     const audio: CustomElement = {
       type: 'audio',
       src,
-      children: [{ text: '' }], // Empty children for Slate compatibility
+      children: [{ text: '' }],
     };
     Transforms.insertNodes(editor, audio);
+    // Add to media content
+    const newMedia: MediaContent = { type: 'audio', src };
+    setMediaContent(prev => [...prev, newMedia]);
+    onMediaContentChange([...mediaContent, newMedia]);
   };
 
   const handleAudioRecord = () => {
@@ -261,9 +277,13 @@ const JobDescriptionSection: React.FC<JobDescriptionSectionProps> = ({ onDescrip
     const video: CustomElement = {
       type: 'video',
       src,
-      children: [{ text: '' }], // Empty children for Slate compatibility
+      children: [{ text: '' }],
     };
     Transforms.insertNodes(editor, video);
+    // Add to media content
+    const newMedia: MediaContent = { type: 'video', src };
+    setMediaContent(prev => [...prev, newMedia]);
+    onMediaContentChange([...mediaContent, newMedia]);
   };
 
   const handleVideoRecord = () => {

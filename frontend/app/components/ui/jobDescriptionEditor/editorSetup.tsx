@@ -36,7 +36,7 @@ interface CustomText {
 }
 
 interface CustomElement {
-  type: ElementType;
+  type: ElementType | 'image' | 'video' | 'audio';
   children: CustomText[];
   href?: string;
   align?: 'left' | 'center' | 'right';

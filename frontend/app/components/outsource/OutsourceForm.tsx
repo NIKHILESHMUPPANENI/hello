@@ -14,13 +14,19 @@ export const PAGE_TOP = "FlowerWork will help you to create an announcement for 
   "find the right talent. You can post in both Personal and FlowerWork's " +
   "LinkedIn accounts.";
 
-  export const LogoContext = createContext<{
-    logoData: string;
-    setLogoData: (data: string) => void;
-  }>({
-    logoData: '',
-    setLogoData: () => {},
-  });
+export const LogoContext = createContext<{
+  logoData: string;
+  setLogoData: (data: string) => void;
+}>({
+  logoData: '',
+  setLogoData: () => { },
+});
+
+
+interface MediaContent {
+  type: 'image' | 'video' | 'audio';
+  src: string;
+}
 
 const PostTask = () => {
   const router = useRouter(); // Initialize router for navigation
@@ -38,7 +44,8 @@ const PostTask = () => {
     website: "",
   });
   const [jobDescription, setJobDescription] = useState("");
-  
+  const [mediaContent, setMediaContent] = useState<MediaContent[]>([]);
+
 
 
 
@@ -92,24 +99,40 @@ const PostTask = () => {
 
 
   const handleJobDescriptionChange = (description: string) => {
+    console.log('Job description updated:', description);
     setJobDescription(description);
+  };
+
+  const handleMediaContentChange = (media: MediaContent[]) => {
+    setMediaContent(media);
   };
 
   const handlePreview = async () => {
     try {
-      let logoData = '';
+      // Store preview data including job description and media content in localStorage
+      localStorage.setItem('previewData', JSON.stringify({
+        jobDescription,
+        mediaContent
+      }));
+  
+      // Store logo if exists
       if (logoFile) {
-        // Convert file to base64 but don't include in URL params
         const reader = new FileReader();
         reader.onloadend = () => {
-          logoData = reader.result as string;
-          // Store in context or localStorage
-          localStorage.setItem('tempLogoData', logoData);
+          localStorage.setItem('tempLogoData', reader.result as string);
+          navigateToPreview();
         };
         reader.readAsDataURL(logoFile);
+      } else {
+        navigateToPreview();
       }
+    } catch (error) {
+      console.error('Error preparing preview:', error);
+    }
+  };
 
-    // Ensure all form data is captured
+  // Ensure all form data is captured
+  const navigateToPreview = () => {
     const formData = {
       taskTitle: taskTitle || '',
       companyName: companyName || '',
@@ -117,25 +140,21 @@ const PostTask = () => {
       email: contactInfo?.email || '',
       phone: contactInfo?.phone || '',
       website: contactInfo?.website || '',
-      logoFileName: logoFile?.name || '',
-      jobDescription: jobDescription || ''
+      // logoFileName: logoFile?.name || '',
+      // jobDescription: encodeURIComponent(jobDescription), // Encode the job description
+      // mediaContent: JSON.stringify(mediaContent)
     };
 
     const queryParams = new URLSearchParams(formData);
     router.push(`/previewPost?${queryParams.toString()}`);
-  } catch (error) {
-    console.error('Error preparing preview:', error);
-  }
-};
+  };
 
   // Update form handlers to ensure state updates
   const updateTaskTitle = (value: string) => {
-    console.log('Updating task title:', value);
     setTaskTitle(value);
   };
 
   const updateCompanyName = (value: string) => {
-    console.log('Updating company name:', value);
     setCompanyName(value);
   };
 
@@ -262,7 +281,10 @@ const PostTask = () => {
         </div>
 
         {/* Job Description */}
-        <JobDescriptionSection onDescriptionChange={handleJobDescriptionChange} />
+        <JobDescriptionSection 
+      onDescriptionChange={handleJobDescriptionChange}
+      onMediaContentChange={handleMediaContentChange}
+    />
 
 
         {/* Skills Section */}
