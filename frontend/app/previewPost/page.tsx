@@ -28,12 +28,8 @@ const PreviewPost = () => {
   const phone = searchParams.get("phone");
   const website = searchParams.get("website");
   const [figmaLink, setFigmaLink] = useState<string>("");
-  const [isEditingFigma, setIsEditingFigma] = useState(false);
-  // const jobDescription = searchParams.get("jobDescription");
-  // const decodedJobDescription = jobDescription ? decodeURIComponent(jobDescription) : '';
-  // const mediaContent = searchParams.get("mediaContent")
-  //   ? JSON.parse(searchParams.get("mediaContent")!) as MediaContent[]
-  //   : [];
+  const [hashtags, setHashtags] = useState<string[]>(['ProjectManagement', 'WorkSmarter']);
+  const [newHashtag, setNewHashtag] = useState<string>('');
 
 
   // Parse skills safely
@@ -70,6 +66,22 @@ const PreviewPost = () => {
     }
   }, []);
 
+  const handleFigmaLinkChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFigmaLink(e.target.value);
+  };
+
+  const handleAddHashtag = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && newHashtag.trim()) {
+      e.preventDefault();
+      setHashtags([...hashtags, newHashtag.trim().replace(/^#/, '')]);
+      setNewHashtag('');
+    }
+  };
+
+  const handleRemoveHashtag = (indexToRemove: number) => {
+    setHashtags(hashtags.filter((_, index) => index !== indexToRemove));
+  };
+
   return (
     <div className="w-full min-h-screen bg-gray-100">
       <header className="relative z-30 w-full">
@@ -78,10 +90,10 @@ const PreviewPost = () => {
       <div className="w-full max-w-4xl mx-auto bg-white shadow-md rounded-md p-6 mt-10">
         {/* Intro Section */}
         <div className="mb-6">
-          <p className="text-lg font-semibold">
+          <h1 className="font-montserrat text-3xl sm:text-4xl font-bold mb-6">
             {PAGE_TOP}
-          </p>
-          <h1 className="text-2xl font-bold mt-4">
+          </h1>
+          <h1 className="text-3xl font-bold mb-4">
             Outsource project: <em>{taskTitle || "N/A"}</em>
           </h1>
         </div>
@@ -127,9 +139,29 @@ const PreviewPost = () => {
             <p className="text-lg mb-2">Phone: {phone || "N/A"}</p>
             <p className="text-lg mb-6">Website: {website || "N/A"}</p>
 
-            <div className="flex gap-2 mt-4 text-sm text-blue-500">
-              <span>#ProjectManagement</span>
-              <span>#WorkSmarter</span>
+            <div className="flex flex-wrap gap-2 mt-4 text-sm">
+              {hashtags.map((tag, index) => (
+                <span
+                  key={index}
+                  className="flex items-center bg-purple-100 text-purple-800 px-3 py-1 rounded-full"
+                >
+                  #{tag}
+                  <button
+                    onClick={() => handleRemoveHashtag(index)}
+                    className="ml-2 hover:text-purple-600"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                value={newHashtag}
+                onChange={(e) => setNewHashtag(e.target.value)}
+                onKeyPress={handleAddHashtag}
+                placeholder="Add hashtag..."
+                className="px-3 py-1 text-sm border rounded-full focus:outline-none focus:border-purple-500"
+              />
             </div>
           </div>
 
@@ -138,29 +170,64 @@ const PreviewPost = () => {
 
         </div>
         {/* Post Visibility Options */}
-        <div className="mb-6">
-
-          <div className="flex flex-col gap-2 mt-2">
-            <label className="flex items-center">
-              <input type="checkbox" className="mr-2" />
-              Share on my personal LinkedIn account
-            </label>
-            <label className="flex items-center">
-              <input type="checkbox" className="mr-2" />
-              Share on FlowerWork's LinkedIn account
-            </label>
+        <div className="mb-8 p-6 border rounded-xl bg-gray-50">
+          <h2 className="text-xl font-semibold mb-4">Sharing Options</h2>
+          
+          <div className="space-y-4">
+            {/* LinkedIn sharing options */}
+            <div className="flex flex-col gap-3 mb-6">
+              <label className="flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <input type="checkbox" className="w-4 h-4 text-purple-500 rounded border-gray-300 focus:ring-purple-500" />
+                <span className="text-gray-700">Share on my personal LinkedIn account</span>
+              </label>
+              <label className="flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <input type="checkbox" className="w-4 h-4 text-purple-500 rounded border-gray-300 focus:ring-purple-500" />
+                <span className="text-gray-700">Share on FlowerWork's LinkedIn account</span>
+              </label>
+            </div>
+        
+            {/* Visibility dropdown */}
+            <div className="space-y-2">
+              <h3 className="text-lg font-medium text-gray-700">Post Visibility</h3>
+              <div className="relative w-full max-w-xs">
+                <select
+                  className="appearance-none w-full px-6 py-3 border-2 rounded-full 
+                    bg-white text-gray-700 font-medium
+                    shadow-sm hover:border-purple-400
+                    focus:outline-none focus:border-purple-500 focus:ring-2 
+                    focus:ring-purple-200 focus:ring-opacity-50
+                    transition-all duration-200 ease-in-out
+                    cursor-pointer"
+                >
+                  <option value="Public" className="py-2">🌎 Public</option>
+                  <option value="Connections Only" className="py-2">👥 Connections Only</option>
+                  <option value="Private" className="py-2">🔒 Private</option>
+                </select>
+                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 text-purple-500"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
           </div>
-          <h2 className="text-lg font-semibold">Post Visibility</h2>
-          <select className="mt-4 w-full p-2 border rounded-md">
-            <option value="Public">Public</option>
-            <option value="Connections Only">Connections Only</option>
-          </select>
         </div>
         {/* Figma Link */}
         <div className="mt-6">
           <CustomInput
             placeholder="Figma Link"
             type="url"
+            value={figmaLink}
+            onChange={handleFigmaLinkChange}
             className="mt-2 flex items-center gap-2 text-black-500 
                   hover:text-black-700 
                   transition border border-black-500 px-4 py-2 
@@ -169,7 +236,7 @@ const PreviewPost = () => {
           </CustomInput>
         </div>
         {/* Action Buttons */}
-        <div className="flex gap-4">
+        <div className="flex gap-4 mt-4">
           <Button
             className="mt-2 bg-purple-500 hover:bg-purple-600 
               text-white flex items-center gap-2 
@@ -177,6 +244,16 @@ const PreviewPost = () => {
               sm:w-auto"
             onClick={() => window.history.back()}
           >
+            <svg
+              className="h-5 w-5"
+              width="16"
+              height="16"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M17.414 2.586a2 2 0 010 2.828l-9.9 9.9a1 1 0 01-.293.207l-4 2a1 1 0 01-1.316-1.316l2-4a1 1 0 01.207-.293l9.9-9.9a2 2 0 012.828 0zM15.586 4L12 7.586 14.414 10 18 6.414 15.586 4zM11 9.414L6.414 14 4 11.586 8.586 7 11 9.414zM5 15h.01L5 15zm0 0l1.586-1.586L4.414 14.414 5 15z" />
+            </svg>
             Edit post
           </Button>
           <Button
