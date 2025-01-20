@@ -46,45 +46,46 @@ const PostTask = () => {
   const [jobDescription, setJobDescription] = useState("");
   const [mediaContent, setMediaContent] = useState<MediaContent[]>([]);
 
-  useEffect(() => {
-    // Check if we're coming back from preview page
-    const isEditMode = document.referrer.includes('previewPost');
-    if (isEditMode) {
-      // Load saved form data
-      const savedFormData = localStorage.getItem('formData');
-      if (savedFormData) {
-        const parsedData = JSON.parse(savedFormData);
-        setTaskTitle(parsedData.taskTitle || '');
-        setCompanyName(parsedData.companyName || '');
-        setSkills(parsedData.skills || []);
-        setContactInfo(parsedData.contactInfo || { email: '', phone: '', website: '' });
-        setJobDescription(parsedData.jobDescription || '');
-        setExperienceRequirements(parsedData.experienceRequirements || []);
-        setMediaContent(parsedData.mediaContent || []);
+  // Update useEffect in OutsourceForm:
+useEffect(() => {
+  // Check for edit data
+  const editData = localStorage.getItem('editFormData');
+  const editLogoData = localStorage.getItem('editLogoData');
 
-        // Handle logo file
-        const logoData = localStorage.getItem('tempLogoData');
-        if (logoData) {
-          const dataURLToFile = async (dataUrl: string, fileName: string) => {
-            const res = await fetch(dataUrl);
-            const blob = await res.blob();
-            const mimeType = dataUrl.split(';')[0].split(':')[1];
-            return new File([blob], fileName, { type: mimeType });
-          };
+  if (editData) {
+    try {
+      const parsedData = JSON.parse(editData);
+      
+      // Restore form data
+      setTaskTitle(parsedData.taskTitle || '');
+      setCompanyName(parsedData.companyName || '');
+      // Parse skills string back to array
+      setSkills(Array.isArray(parsedData.skills) ? 
+        parsedData.skills : 
+        JSON.parse(parsedData.skills || '[]')
+      );
+      setContactInfo({
+        email: parsedData.email || '',
+        phone: parsedData.phone || '',
+        website: parsedData.website || ''
+      });
+      setJobDescription(parsedData.jobDescription || '');
+      setMediaContent(parsedData.mediaContent || []);
 
-          dataURLToFile(logoData, 'company-logo.png')
-            .then(file => setLogoFile(file))
-            .catch(err => console.error('Error converting logo data:', err));
-        }
-      }
-    } else {
-      // Clear all stored data when loading the form fresh
-      localStorage.removeItem('formData');
-      localStorage.removeItem('previewData');
-      localStorage.removeItem('tempLogoData');
-      localStorage.removeItem('editorContent');
+      // Clear edit data
+      localStorage.removeItem('editFormData');
+    } catch (error) {
+      console.error('Error restoring edit data:', error);
+      // Initialize with empty values if error
+      setSkills([]);
     }
-  }, []);
+  }
+
+  if (editLogoData) {
+    setLogoFile(null);
+    localStorage.removeItem('editLogoData');
+  }
+}, []); // Run once on mount
 
   const addSkill = (value: string) => {
     if (value.trim() && skills.length < maxSkills) {
@@ -210,7 +211,7 @@ const PostTask = () => {
     localStorage.removeItem('previewData');
     localStorage.removeItem('tempLogoData');
     localStorage.removeItem('editorContent');
-    
+
     // Reset form state
     setTaskTitle('');
     setCompanyName('');
@@ -568,57 +569,57 @@ const PostTask = () => {
 
         {/* Buttons */}
         <div className="flex flex-row sm:flex-row justify-start gap-4 mt-6">
-        {/* Preview Post Button */}
+          {/* Preview Post Button */}
 
-        <Button
-          className="
+          <Button
+            className="
               mt-2 bg-purple-500 hover:bg-purple-600 
               text-white flex items-center gap-2 
               px-4 py-2 rounded-full shadow hover:shadow-md
               sm:w-auto"
-          onClick={handlePreview}>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="w-5 h-5"
-          >
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          Preview Post
-        </Button>
+            onClick={handlePreview}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-5 h-5"
+            >
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            Preview Post
+          </Button>
 
-        {/* Save Post as Draft Button */}
-        <Button
-          variant="outline"
-          className="
+          {/* Save Post as Draft Button */}
+          <Button
+            variant="outline"
+            className="
           mt-2 flex items-center gap-2 text-black-500 
           hover:text-black-700 
           transition border border-black-500 px-4 py-2 
           rounded-full shadow hover:shadow-md">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="w-5 h-5"
-          >
-            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-          </svg>
-          Save post as draft
-        </Button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-5 h-5"
+            >
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+            </svg>
+            Save post as draft
+          </Button>
         </div>
       </div>
     </div>
-    
+
   );
 };
 

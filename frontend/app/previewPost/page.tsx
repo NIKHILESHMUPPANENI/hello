@@ -82,8 +82,29 @@ const PreviewPost = () => {
   };
 
   const handleEditPost = () => {
-    // Don't remove stored data since we want to keep it for editing
-    window.history.back(); // Use browser back instead of router.push
+    try {
+      // Store all form data
+      localStorage.setItem('editFormData', JSON.stringify({
+        taskTitle,
+        companyName,
+        skills,
+        email,
+        phone,
+        website,
+        jobDescription: previewData.jobDescription,
+        mediaContent: previewData.mediaContent
+      }));
+  
+      // Store logo separately
+      if (logoUrl) {
+        localStorage.setItem('editLogoData', logoUrl);
+      }
+  
+      // Use router to navigate back
+      router.push('/post-task');
+    } catch (error) {
+      console.error('Error saving data:', error);
+    }
   };
 
   const handlePostToLinkedIn = () => {
