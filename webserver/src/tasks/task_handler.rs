@@ -17,6 +17,7 @@ pub struct CreateTaskRequest {
     reward: i64,
     project_id: i32,
     title:String,
+    created_at:Option<String>,
     due_date: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
@@ -62,6 +63,7 @@ pub async fn create_task(
             task.project_id,
             user_id,
             &task.title,
+            task.created_at.clone(),
             task.due_date.clone()
         ).map_err(DatabaseError::from)
     })?;
@@ -148,12 +150,12 @@ pub async fn delete_task(
 mod tests {
     use crate::database::db;
     use crate::database::test_db::TestDb;
-    use crate::handlers::auth_handler::{auth_routes, login, LoginRequest};
+    use crate::handlers::auth_handler::{auth_routes, LoginRequest};
     use crate::services::project_service::create_project;
-    use crate::services::user_service;
     use crate::services::user_service::register_user;
     use actix_web::http::StatusCode;
     use actix_web::{test, App};
+    use chrono::Utc;
 
     use super::*;
 
@@ -174,10 +176,11 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title = "Task title";
+        let created_at = Some(Utc::now().naive_utc().to_string());
         let due_date = None;
 
 
-        let user = register_user(
+        let _ = register_user(
             &mut db.conn(),
             "test user",
             "testpassword",
@@ -212,6 +215,7 @@ mod tests {
                 reward,
                 project_id: 1,
                 title: title.to_string(),
+                created_at,
                 due_date
             })
             .to_request();
@@ -238,6 +242,7 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title = "Task title";
+        let created_at = Some("01-01-2000".to_string());
         let due_date = Some("25-12-2024".to_string());
 
         let user = register_user(
@@ -283,6 +288,7 @@ mod tests {
                 reward,
                 project_id: project.id,
                 title: title.to_string(),
+                created_at,
                 due_date,
             })
             .to_request();
@@ -332,6 +338,7 @@ async fn test_update_task_success() {
         project.id,
         user.id,
         "initial title",
+        Some(Utc::now().naive_utc().to_string()),
         None,
     )
     .expect("Failed to create task");
@@ -427,6 +434,7 @@ async fn test_delete_task_success() {
         project.id,
         user.id,
         "initial title",
+        Some("01-01-2000".to_string()),
         None,
     )
     .expect("Failed to create task");

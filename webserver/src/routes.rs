@@ -2,8 +2,6 @@ use actix_web::web;
 
 use job_handler::job_routes_auth;
 use linkedin_handler::linkedin_routes;
-// use task_handler::task_routes;
-// use tasks::task_handler::task_routes;
 use user_handler::user_routes;
 
 use crate::auth::auth_middleware;

@@ -5,6 +5,8 @@ use diesel::result::Error as DieselError;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
+use crate::tasks::task_error::TaskError;
+
 #[derive(Error, Debug)]
 pub enum DatabaseError {
     #[error("Database error occurred")]
@@ -13,6 +15,8 @@ pub enum DatabaseError {
     ConnectionError(#[from] r2d2::PoolError),
     #[error("Diesel error occurred")]
     DieselError(#[from] DieselError),
+    #[error("Data Validation error occurred: {0}")]
+    DateValidationError(#[from] TaskError),
 }
 
 impl ResponseError for DatabaseError {
@@ -21,6 +25,7 @@ impl ResponseError for DatabaseError {
             DatabaseError::GenericError => StatusCode::INTERNAL_SERVER_ERROR,
 
             DatabaseError::ConnectionError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            DatabaseError::DateValidationError(_) => StatusCode::BAD_REQUEST,
 
             DatabaseError::DieselError(ref err) => match &err {
                 DieselError::DatabaseError(_, _) => StatusCode::CONFLICT,
