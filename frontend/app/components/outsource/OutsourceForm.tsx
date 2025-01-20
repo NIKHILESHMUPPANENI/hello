@@ -46,8 +46,45 @@ const PostTask = () => {
   const [jobDescription, setJobDescription] = useState("");
   const [mediaContent, setMediaContent] = useState<MediaContent[]>([]);
 
+  useEffect(() => {
+    // Check if we're coming back from preview page
+    const isEditMode = document.referrer.includes('previewPost');
+    if (isEditMode) {
+      // Load saved form data
+      const savedFormData = localStorage.getItem('formData');
+      if (savedFormData) {
+        const parsedData = JSON.parse(savedFormData);
+        setTaskTitle(parsedData.taskTitle || '');
+        setCompanyName(parsedData.companyName || '');
+        setSkills(parsedData.skills || []);
+        setContactInfo(parsedData.contactInfo || { email: '', phone: '', website: '' });
+        setJobDescription(parsedData.jobDescription || '');
+        setExperienceRequirements(parsedData.experienceRequirements || []);
+        setMediaContent(parsedData.mediaContent || []);
 
+        // Handle logo file
+        const logoData = localStorage.getItem('tempLogoData');
+        if (logoData) {
+          const dataURLToFile = async (dataUrl: string, fileName: string) => {
+            const res = await fetch(dataUrl);
+            const blob = await res.blob();
+            const mimeType = dataUrl.split(';')[0].split(':')[1];
+            return new File([blob], fileName, { type: mimeType });
+          };
 
+          dataURLToFile(logoData, 'company-logo.png')
+            .then(file => setLogoFile(file))
+            .catch(err => console.error('Error converting logo data:', err));
+        }
+      }
+    } else {
+      // Clear all stored data when loading the form fresh
+      localStorage.removeItem('formData');
+      localStorage.removeItem('previewData');
+      localStorage.removeItem('tempLogoData');
+      localStorage.removeItem('editorContent');
+    }
+  }, []);
 
   const addSkill = (value: string) => {
     if (value.trim() && skills.length < maxSkills) {
@@ -109,13 +146,26 @@ const PostTask = () => {
 
   const handlePreview = async () => {
     try {
-      // Store preview data including job description and media content in localStorage
+      // Save all form data to localStorage
+      const formData = {
+        taskTitle,
+        companyName,
+        skills,
+        contactInfo,
+        jobDescription,
+        experienceRequirements,
+        mediaContent,
+        editorContent: localStorage.getItem('editorContent') // Save editor content
+      };
+      localStorage.setItem('formData', JSON.stringify(formData));
+
+      // Store preview data
       localStorage.setItem('previewData', JSON.stringify({
         jobDescription,
         mediaContent
       }));
-  
-      // Store logo if exists
+
+      // Handle logo file
       if (logoFile) {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -140,13 +190,36 @@ const PostTask = () => {
       email: contactInfo?.email || '',
       phone: contactInfo?.phone || '',
       website: contactInfo?.website || '',
-      // logoFileName: logoFile?.name || '',
-      // jobDescription: encodeURIComponent(jobDescription), // Encode the job description
-      // mediaContent: JSON.stringify(mediaContent)
     };
 
     const queryParams = new URLSearchParams(formData);
     router.push(`/previewPost?${queryParams.toString()}`);
+  };
+
+  const handleSubmitPost = () => {
+    // Clear all stored data when actually submitting the post
+    localStorage.removeItem('formData');
+    localStorage.removeItem('previewData');
+    localStorage.removeItem('tempLogoData');
+    // Add your submission logic here
+  };
+
+  const handleCancel = () => {
+    // Clear all stored data
+    localStorage.removeItem('formData');
+    localStorage.removeItem('previewData');
+    localStorage.removeItem('tempLogoData');
+    localStorage.removeItem('editorContent');
+    
+    // Reset form state
+    setTaskTitle('');
+    setCompanyName('');
+    setSkills([]);
+    setContactInfo({ email: '', phone: '', website: '' });
+    setJobDescription('');
+    setExperienceRequirements([]);
+    setMediaContent([]);
+    setLogoFile(null);
   };
 
   // Update form handlers to ensure state updates
@@ -281,10 +354,10 @@ const PostTask = () => {
         </div>
 
         {/* Job Description */}
-        <JobDescriptionSection 
-      onDescriptionChange={handleJobDescriptionChange}
-      onMediaContentChange={handleMediaContentChange}
-    />
+        <JobDescriptionSection
+          onDescriptionChange={handleJobDescriptionChange}
+          onMediaContentChange={handleMediaContentChange}
+        />
 
 
         {/* Skills Section */}
@@ -494,57 +567,58 @@ const PostTask = () => {
 
 
         {/* Buttons */}
-        <div className="flex flex-col sm:flex-row justify-start gap-4 mt-6">
-          {/* Preview Post Button */}
+        <div className="flex flex-row sm:flex-row justify-start gap-4 mt-6">
+        {/* Preview Post Button */}
 
-          <Button
-            className="
+        <Button
+          className="
               mt-2 bg-purple-500 hover:bg-purple-600 
               text-white flex items-center gap-2 
               px-4 py-2 rounded-full shadow hover:shadow-md
               sm:w-auto"
-            onClick={handlePreview}>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-5 h-5"
-            >
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            Preview Post
-          </Button>
+          onClick={handlePreview}>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-5 h-5"
+          >
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          Preview Post
+        </Button>
 
-          {/* Save Post as Draft Button */}
-          <Button
-            variant="outline"
-            className="
+        {/* Save Post as Draft Button */}
+        <Button
+          variant="outline"
+          className="
           mt-2 flex items-center gap-2 text-black-500 
           hover:text-black-700 
           transition border border-black-500 px-4 py-2 
           rounded-full shadow hover:shadow-md">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-5 h-5"
-            >
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-            </svg>
-            Save post as draft
-          </Button>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-5 h-5"
+          >
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
+          Save post as draft
+        </Button>
         </div>
       </div>
     </div>
+    
   );
 };
 

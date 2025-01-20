@@ -33,11 +33,12 @@ interface CustomText {
   uppercase?: boolean;
   italic?: boolean;
   underline?: boolean;
+  children?: Descendant[];
 }
 
 interface CustomElement {
   type: ElementType | 'image' | 'video' | 'audio';
-  children: CustomText[];
+  children: CustomText[] | Descendant[];
   href?: string;
   align?: 'left' | 'center' | 'right';
   src?: string;
@@ -51,6 +52,9 @@ declare module "slate" {
     Text: CustomText;
   }
 }
+
+// Add this type for Descendant
+type Descendant = CustomElement | CustomText;
 
 const LIST_TYPES = ['numbered-list', 'bulleted-list'] as const;
 
@@ -216,5 +220,6 @@ export {
     unwrapLink,
     type CustomElement,
     type CustomText,
-    type ElementType
+    type ElementType,
+    type Descendant // Export the Descendant type
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { EmojiClickData } from "emoji-picker-react";
 import { Slate, Editable, withReact, RenderElementProps } from "slate-react";
 import {
@@ -57,6 +57,30 @@ const JobDescriptionSection: React.FC<JobDescriptionSectionProps> = ({
 
   const maxCharacters = 1000;
 
+  useEffect(() => {
+    // Only restore editor content if coming from preview
+    const isEditMode = document.referrer.includes('previewPost');
+    if (isEditMode) {
+      const savedEditorContent = localStorage.getItem('editorContent');
+      if (savedEditorContent) {
+        const parsedContent = JSON.parse(savedEditorContent);
+        setValue(parsedContent);
+        setIsPlaceholderVisible(false);
+        
+        // Extract and set media content
+        const mediaNodes = parsedContent.filter((node: any) => 
+          ['image', 'video', 'audio'].includes(node.type)
+        );
+        const mediaItems = mediaNodes.map((node: any) => ({
+          type: node.type,
+          src: node.src
+        }));
+        setMediaContent(mediaItems);
+        onMediaContentChange(mediaItems);
+      }
+    }
+  }, []);
+
   const handleTextChange = (newValue: Descendant[]) => {
     const plainText = newValue.map((node) => Node.string(node)).join("\n");
 
@@ -83,6 +107,20 @@ const JobDescriptionSection: React.FC<JobDescriptionSectionProps> = ({
 
     setValue(value);
     onDescriptionChange(plainText); // Send plain text to parent
+
+    // Save editor content to localStorage
+    localStorage.setItem('editorContent', JSON.stringify(newValue));
+    
+    // Update media content
+    const mediaNodes = newValue.filter((node: any) => 
+      ['image', 'video', 'audio'].includes(node.type)
+    );
+    const mediaItems = mediaNodes.map((node: any) => ({
+      type: node.type,
+      src: node.src
+    }));
+    setMediaContent(mediaItems);
+    onMediaContentChange(mediaItems);
   };
 
 
@@ -500,7 +538,23 @@ const JobDescriptionSection: React.FC<JobDescriptionSectionProps> = ({
     }
   }, []);
 
+  const handleSave = () => {
+    // Save the current content
+    const plainText = value.map((node) => Node.string(node)).join("\n");
+    onDescriptionChange(plainText);
+    // You could add a success notification here
+  };
 
+  const handleCancel = () => {
+    // Reset the editor to empty state
+    const emptyState = [{ type: "paragraph", children: [{ text: "" }] }] as Descendant[];
+    setValue(emptyState);
+    setIsPlaceholderVisible(true);
+    onDescriptionChange("");
+    // Force editor to update its content
+    editor.children = emptyState;
+    Transforms.select(editor, { path: [0, 0], offset: 0 });
+  };
 
   return (
     <div className="mb-6 relative">
@@ -522,7 +576,7 @@ const JobDescriptionSection: React.FC<JobDescriptionSectionProps> = ({
           />
           {/* Editable Content */}
           <div className="relative">
-            {isPlaceholderVisible && (
+            {isPlaceholderVisible && (value[0]?.children?.[0] as CustomText)?.text === "" && (
               <div className="absolute top-0 left-0 text-gray-400 pointer-events-none p-[1px]">
                 {PLACEHOLDER_TEXT}
               </div>
@@ -563,7 +617,25 @@ const JobDescriptionSection: React.FC<JobDescriptionSectionProps> = ({
           </div>
         </Slate>
       </div>
-
+      {/* Editor Controls */}
+      <div className="flex justify-end gap-3 mt-4 pt-4">
+        <button
+          onClick={handleCancel}
+          className="px-4 py-2 text-gray-600 hover:text-gray-800 
+              border border-gray-300 rounded-full hover:bg-gray-50 
+              transition-colors duration-200 flex items-center gap-2"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 bg-purple-500 text-white 
+              rounded-full hover:bg-purple-600 
+              transition-colors duration-200 flex items-center gap-2"
+        >
+          Save
+        </button>
+      </div>
 
       {/* Character Counter */}
       <div className="flex justify-between mt-2">

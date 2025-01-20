@@ -1,13 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Navbar } from "../components";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { PAGE_TOP } from "../components/outsource/OutsourceForm";
 import CustomInput from "@/components/ui/custom-input";
-
 
 interface MediaContent {
   type: 'image' | 'video' | 'audio';
@@ -16,6 +15,7 @@ interface MediaContent {
 
 const PreviewPost = () => {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [previewData, setPreviewData] = useState<{
     jobDescription: string;
     mediaContent: MediaContent[];
@@ -30,7 +30,6 @@ const PreviewPost = () => {
   const [figmaLink, setFigmaLink] = useState<string>("");
   const [hashtags, setHashtags] = useState<string[]>(['ProjectManagement', 'WorkSmarter']);
   const [newHashtag, setNewHashtag] = useState<string>('');
-
 
   // Parse skills safely
   const parsedSkills = skills ? (JSON.parse(skills) as string[]) : [];
@@ -80,6 +79,20 @@ const PreviewPost = () => {
 
   const handleRemoveHashtag = (indexToRemove: number) => {
     setHashtags(hashtags.filter((_, index) => index !== indexToRemove));
+  };
+
+  const handleEditPost = () => {
+    // Don't remove stored data since we want to keep it for editing
+    window.history.back(); // Use browser back instead of router.push
+  };
+
+  const handlePostToLinkedIn = () => {
+    // Clear all stored data after successful post
+    localStorage.removeItem('formData');
+    localStorage.removeItem('previewData');
+    localStorage.removeItem('tempLogoData');
+    localStorage.removeItem('editorContent');
+    // Add your LinkedIn posting logic here
   };
 
   return (
@@ -242,7 +255,7 @@ const PreviewPost = () => {
               text-white flex items-center gap-2 
               px-4 py-2 rounded-full shadow hover:shadow-md
               sm:w-auto"
-            onClick={() => window.history.back()}
+            onClick={handleEditPost}
           >
             <svg
               className="h-5 w-5"
@@ -261,6 +274,7 @@ const PreviewPost = () => {
               text-white flex items-center gap-2 
               px-4 py-2 rounded-full shadow hover:shadow-md
               sm:w-auto"
+            onClick={handlePostToLinkedIn}
           >
             <svg
               width="16"
