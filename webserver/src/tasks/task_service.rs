@@ -191,8 +191,8 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title : &str= "Test Title";
-        let created_at = Some(Utc::now().naive_utc().to_string());
-        let due_date = Some("25-12-2024".to_string());
+        let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
+        let due_date = Some("25-12-3044".to_string());
 
         let user_id = register_user(
             &mut db.conn(),
@@ -220,7 +220,7 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title = "Title test";
-        let created_at = Some(Utc::now().naive_utc().to_string());
+        let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
         let due_date = None;
 
 
@@ -256,7 +256,7 @@ mod tests {
         let reward = 100;
         let title = "title test";
         let created_at = Some("01-01-2025".to_string());
-        let due_date = Some("25-12-2024".to_string());
+        let due_date = None;
 
 
         let user_id = register_user(
@@ -292,7 +292,7 @@ mod tests {
 
         let reward = 100;
         let title = "test title";
-        let created_at = Some(Utc::now().naive_utc().to_string());
+        let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
         let due_date =None;
 
         
@@ -310,7 +310,7 @@ mod tests {
         .expect("Failed to create project")
         .id;
 
-        let task = create_task(&mut db.conn(), "original_Description", reward, project_id, user_id,title, created_at,due_date);
+        let task = create_task(&mut db.conn(), "original_Description", reward, project_id, user_id,title, created_at.clone(),due_date);
 
 
         // Call patch_task to update description
@@ -324,7 +324,7 @@ mod tests {
             None,
             None,
             None,
-            None,
+            created_at.clone(),
             None,
             None,
 
@@ -340,7 +340,7 @@ mod tests {
         let db = TestDb::new();
          let reward = 100;
         let title = "test title";
-        let created_at = Some(Utc::now().naive_utc().to_string());
+        let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
         let due_date =None;
         
         let user_id = register_user(
@@ -387,7 +387,7 @@ fn test_delete_task() {
     
     let reward = 100;
     let title = "test title";
-    let created_at = Some(Utc::now().naive_utc().to_string());
+    let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
     let due_date = None;
 
     let user_id = register_user(

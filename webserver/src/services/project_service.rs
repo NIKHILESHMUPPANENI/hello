@@ -144,8 +144,8 @@ mod tests {
 
         let title = "Test Project";
         let description = "Test Project Description";
-        let created_at = Some(Utc::now().naive_utc().to_string());
-        let due_date = Some("25-12-2024".to_string());
+        let created_at = Some(Utc::now().format("%d-%m-%Y").to_string());
+        let due_date = Some("25-12-3000".to_string());
 
         let user_id = register_user(&mut conn, "testuser", "password123", "test@example.com")
             .expect("Failed to register user")

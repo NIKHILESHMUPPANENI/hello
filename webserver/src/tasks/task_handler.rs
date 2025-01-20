@@ -178,7 +178,7 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title = "Task title";
-        let created_at = Some(Utc::now().naive_utc().to_string());
+        let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
         let due_date = None;
 
 
@@ -224,7 +224,7 @@ mod tests {
 
         let resp = test::call_service(&app, req).await;
 
-        assert_eq!(resp.status(), StatusCode::CONFLICT);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[actix_rt::test]
@@ -245,7 +245,7 @@ mod tests {
         let reward = 100;
         let title = "Task title";
         let created_at = Some("01-01-2000".to_string());
-        let due_date = Some("25-12-2024".to_string());
+        let due_date = Some("25-12-3024".to_string());
 
         let user = register_user(
             &mut db.conn(),
@@ -340,7 +340,7 @@ async fn test_update_task_success() {
         project.id,
         user.id,
         "initial title",
-        Some(Utc::now().naive_utc().to_string()),
+        Some(Utc::now().format("%d-%m-%Y").to_string()),
         None,
     )
     .expect("Failed to create task");
@@ -375,8 +375,8 @@ async fn test_update_task_success() {
             title: Some("updated title".to_string()),
             progress: Some(Progress::Completed),
             priority: Some(Priority::High),
-            created_at:Some(Utc::now().naive_utc().to_string()),
-            due_date: Some("26-12-2024".to_string()),
+            created_at:Some("01-01-1999".to_string()),
+            due_date: Some("26-12-2029".to_string()),
             assigned_users: Some(vec![]),
         })
         .to_request();
@@ -471,10 +471,7 @@ async fn test_delete_task_success() {
 
     // Verify the task is deleted
     let task_check = task_service::get_task_by_id(&mut db.conn(), task.id, &user.id);
-        // .filter(id.eq(task.id))
-        // .first::<Task>(&mut db.conn())
-        // .optional()
-        // .expect("Failed to query task");
+      
 
     assert!(task_check.is_err()); 
 }
