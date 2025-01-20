@@ -92,11 +92,16 @@ pub fn update_task(
     title: Option<&str>,
     progress: Option<Progress>,
     priority: Option<Priority>,
+    created_at: Option<String>,
     due_date: Option<String>,
     assigned_users: Option<Vec<i32>>,
-) -> QueryResult<TaskWithAssignedUsers> {
+) -> Result<TaskWithAssignedUsers,TaskError> {
     use crate::schema::{tasks, task_assignees};
 
+
+    // Date validation
+    let parsed_created_at = parse_and_validate_created_at(created_at)?;
+    let parsed_due_date = parse_and_validate_due_date(due_date)?;
     
     conn.transaction(|conn| {
         // Update the main task details
@@ -108,10 +113,12 @@ pub fn update_task(
                 title.map(|t| tasks::title.eq(t)),
                 progress.map(|prog| tasks::progress.eq(prog)),
                 priority.map(|pri| tasks::priority.eq(pri)),
-                due_date.map(|date| {
-                    let parsed_date = chrono::NaiveDate::parse_from_str(&date, "%d-%m-%Y").ok();
-                    parsed_date.and_then(|d| d.and_hms_opt(0, 0, 0))
-                }).map(|dt| tasks::due_date.eq(dt)),
+                Some(tasks::created_at.eq(parsed_created_at)),
+                parsed_due_date.map(|dt| tasks::due_date.eq(dt)),
+                // due_date.map(|date| {
+                //     let parsed_date = chrono::NaiveDate::parse_from_str(&date, "%d-%m-%Y").ok();
+                //     parsed_date.and_then(|d| d.and_hms_opt(0, 0, 0))
+                // }).map(|dt| tasks::due_date.eq(dt)),
             ))
             .get_result::<Task>(conn)?;
 
@@ -319,6 +326,7 @@ mod tests {
             None,
             None,
             None,
+            None,
 
         ).expect("faild to update the task");
         
@@ -357,6 +365,7 @@ mod tests {
             task.unwrap().id,
             &user_id,
            None,
+            None,
             None,
             None,
             None,

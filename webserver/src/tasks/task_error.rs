@@ -17,3 +17,10 @@ impl fmt::Display for TaskError {
 
 impl Error for TaskError {}
 
+impl From<diesel::result::Error> for TaskError {
+    fn from(error: diesel::result::Error) -> Self {
+        TaskError {
+            message: format!("Database error: {}", error),
+        }
+    }
+}

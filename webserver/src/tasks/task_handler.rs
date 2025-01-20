@@ -28,6 +28,7 @@ pub struct UpdateTaskRequest {
     pub title: Option<String>,
     pub progress: Option<Progress>,
     pub priority: Option<Priority>,
+    pub created_at: Option<String>, 
     pub due_date: Option<String>, 
     pub assigned_users: Option<Vec<i32>>, 
 }
@@ -118,6 +119,7 @@ pub async fn update_task(
             task_update.title.as_deref(),
             task_update.progress,
             task_update.priority,
+            task_update.created_at.clone(),
             task_update.due_date.clone(),
             task_update.assigned_users.clone(),
         )
@@ -373,6 +375,7 @@ async fn test_update_task_success() {
             title: Some("updated title".to_string()),
             progress: Some(Progress::Completed),
             priority: Some(Priority::High),
+            created_at:Some(Utc::now().naive_utc().to_string()),
             due_date: Some("26-12-2024".to_string()),
             assigned_users: Some(vec![]),
         })
