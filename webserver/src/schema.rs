@@ -57,7 +57,17 @@ diesel::table! {
         updated_at -> Timestamp,
         due_date -> Nullable<Timestamp>,
         priority -> Varchar,
-        assignee_id -> Nullable<Int4>,
+        progress -> Varchar,
+        user_id -> Int4,
+        completed -> Bool,
+    }
+}
+
+diesel::table! {
+    subtask_assignees (id) {
+        id -> Int4,
+        sub_task_id -> Int4,
+        user_id -> Int4,
     }
 }
 
@@ -106,7 +116,9 @@ diesel::table! {
 diesel::joinable!(jobs -> users (user_id));
 diesel::joinable!(projects -> users (user_id));
 diesel::joinable!(sub_tasks -> tasks (task_id));
-diesel::joinable!(sub_tasks -> users (assignee_id));
+diesel::joinable!(sub_tasks -> users (user_id));
+diesel::joinable!(subtask_assignees -> sub_tasks (sub_task_id));
+diesel::joinable!(subtask_assignees -> users (user_id));
 diesel::joinable!(task_assignees -> tasks (task_id));
 diesel::joinable!(task_assignees -> users (user_id));
 diesel::joinable!(tasks -> projects (project_id));
@@ -118,6 +130,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     jobs,
     projects,
     sub_tasks,
+    subtask_assignees,
     task_assignees,
     tasks,
     user_tasks,

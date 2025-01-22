@@ -6,3 +6,5 @@ pub mod enums;
 pub mod task_assignee;
 pub mod sub_tasks;
 pub mod herlpers;
+pub mod sub_tasks_service;
+pub mod sub_tasks_handler;
