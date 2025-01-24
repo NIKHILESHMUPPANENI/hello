@@ -1,4 +1,4 @@
-use actix_web::{delete, get, patch, post, web, HttpResponse, Responder, ResponseError};
+use actix_web::{ get, post, web, HttpResponse, Responder, ResponseError};
 
 use diesel::PgConnection;
 use serde::{Deserialize, Serialize};
@@ -95,3 +95,222 @@ pub async fn get_sub_tasks_with_assignees(
     Ok::<HttpResponse, ApiError>(HttpResponse::Ok().json(task))
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::database::db;
+    use crate::database::test_db::TestDb;
+    use crate::handlers::auth_handler::{auth_routes, LoginRequest};
+    use crate::services::project_service::create_project;
+    use crate::services::user_service::register_user;
+    use crate::tasks::task_service::create_task;
+    use actix_web::http::StatusCode;
+    use actix_web::{test, App};
+    use chrono::Utc;
+
+    use super::*;
+
+    #[actix_rt::test]
+    async fn create_subtask_success() {
+        let db = TestDb::new();
+        let pool = db::establish_connection(&db.url());
+        dotenv::dotenv().ok();
+    
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(pool.clone()))
+                .configure(auth_routes)
+                .configure(sub_task_routes),
+        )
+        .await;
+    
+        let user = register_user(
+            &mut db.conn(),
+            "test user",
+            "testpassword",
+            "test@email.com",
+        )
+        .expect("Failed to register user");
+    
+        let project = create_project(
+            &mut db.conn(),
+            "test project",
+            "test project description",
+            &user.id,
+        )
+        .expect("Failed to create project");
+
+        // Dynamically create a task and fetch its ID
+        let task_id = create_task(
+            &mut db.conn(),
+            "initial description",
+            100,
+            project.id,
+            user.id,
+            "initial title",
+            Some("01-01-2000".to_string()),
+            None,
+        )
+        .expect("Failed to create task");
+    
+        let log_req = test::TestRequest::post()
+            .uri("/auth/login")
+            .set_json(&LoginRequest {
+                email: "test@email.com".to_string(),
+                password: "testpassword".to_string(),
+            })
+            .to_request();
+    
+        let log_resp = test::call_service(&app, log_req).await;
+    
+        assert_eq!(log_resp.status(), StatusCode::OK);
+    
+        let auth_header = log_resp
+            .headers()
+            .get("Authorization")
+            .expect("No authorization header")
+            .to_str()
+            .expect("Failed to convert header to string");
+    
+        let req = test::TestRequest::post()
+            .uri("/subtasks")
+            .append_header(("Authorization", auth_header))
+            .set_json(&CreateSubTaskRequest {
+                task_id:task_id.id, 
+                title: "Subtask title".to_string(),
+                description: "Subtask description".to_string(),
+                created_at: Some(Utc::now().format("%d-%m-%Y").to_string()),
+                due_date: None,
+                priority: Priority::Medium,
+                progress: Progress::ToDo,
+                assigned_users: Some(vec![1]),
+            })
+            .to_request();
+    
+        let resp = test::call_service(&app, req).await;
+    
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+    
+
+    #[actix_rt::test]
+    async fn get_sub_tasks_success() {
+        let db = TestDb::new();
+        let pool = db::establish_connection(&db.url());
+        dotenv::dotenv().ok();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(pool.clone()))
+                .configure(auth_routes)
+                .configure(sub_task_routes),
+        )
+        .await;
+
+        let _ = register_user(
+            &mut db.conn(),
+            "test user",
+            "testpassword",
+            "test@email.com",
+        )
+        .expect("Failed to register user");
+
+        let log_req = test::TestRequest::post()
+            .uri("/auth/login")
+            .set_json(&LoginRequest {
+                email: "test@email.com".to_string(),
+                password: "testpassword".to_string(),
+            })
+            .to_request();
+
+        let log_resp = test::call_service(&app, log_req).await;
+
+        assert_eq!(log_resp.status(), StatusCode::OK);
+
+        let auth_header = log_resp
+            .headers()
+            .get("Authorization")
+            .expect("No authorization header")
+            .to_str()
+            .expect("Failed to convert header to string");
+
+        let req = test::TestRequest::get()
+            .uri("/subtasks")
+            .append_header(("Authorization", auth_header))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn get_sub_tasks_with_assignees_success() {
+        let db = TestDb::new();
+        let pool = db::establish_connection(&db.url());
+        dotenv::dotenv().ok();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(pool.clone()))
+                .configure(auth_routes)
+                .configure(sub_task_routes),
+        )
+        .await;
+
+        let user = register_user(
+            &mut db.conn(),
+            "test user",
+            "testpassword",
+            "test@email.com",
+        )
+        .expect("Failed to register user");
+    
+        let project = create_project(
+            &mut db.conn(),
+            "test project",
+            "test project description",
+            &user.id,
+        )
+        .expect("Failed to create project");
+
+        let task_id = create_task(
+            &mut db.conn(),
+            "initial description",
+            100,
+            project.id,
+            user.id,
+            "initial title",
+            Some("01-01-2000".to_string()),
+            None,
+        )
+        .expect("Failed to create task");
+
+        let log_req = test::TestRequest::post()
+            .uri("/auth/login")
+            .set_json(&LoginRequest {
+                email: "test@email.com".to_string(),
+                password: "testpassword".to_string(),
+            })
+            .to_request();
+
+        let log_resp = test::call_service(&app, log_req).await;
+
+        assert_eq!(log_resp.status(), StatusCode::OK);
+
+        let auth_header = log_resp
+            .headers()
+            .get("Authorization")
+            .expect("No authorization header")
+            .to_str()
+            .expect("Failed to convert header to string");
+
+        let req = test::TestRequest::get()
+            .uri(&format!("/subtasks/{}", task_id.id))
+            .append_header(("Authorization", auth_header))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+}

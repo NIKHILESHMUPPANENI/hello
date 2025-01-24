@@ -7,8 +7,8 @@ use chrono::{self, NaiveDateTime};
 use crate::models::project::Project;
 use crate::models::user::User;
 use crate::schema::tasks::{self};
+use crate::tasks::enums::{Progress,Priority};
 
-use super::enums::{Priority, Progress};
 use super::task_assignee::TaskWithAssignees;
 
 

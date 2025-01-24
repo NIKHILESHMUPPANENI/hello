@@ -1,14 +1,14 @@
 use diesel::prelude::*;
 use diesel::result::Error;
 
-use crate::tasks::task::{NewTask, Task};
+use crate::models::sub_tasks::{SubTask, TaskWithSubTasks};
+use crate::models::task::{NewTask, Task};
+use crate::models::task_assignee::TaskWithAssignedUsers;
 use crate::schema::{tasks, users};
 use crate::schema::tasks::dsl::{id,user_id as task_user_id};
 
 use super::enums::{Priority, Progress};
 use super::herlpers::{ parse_and_validate_created_at, parse_and_validate_due_date};
-use super::sub_tasks::{SubTask, TaskWithSubTasks};
-use super::task_assignee::TaskWithAssignedUsers;
 use super::task_error::TaskError;
 
 pub fn create_task(

@@ -4,7 +4,7 @@ use diesel::{
 };
 
 use crate::models::project::Project;
-use crate::tasks::task::Task;
+use crate::models::task::Task;
 use crate::{models::project::NewProject, schema, schema::projects};
 
 pub fn create_project(

@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{models::user::User, schema::task_assignees, tasks::task::Task};
+use crate::{models::{task::Task, user::User}, schema::task_assignees};
 
 #[derive(Insertable, Associations, Identifiable, Queryable, Debug)]
 #[diesel(table_name = task_assignees)]

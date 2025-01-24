@@ -3,7 +3,7 @@ use actix_web::{delete, get, patch, post, web, HttpResponse, Responder, Response
 use serde::{Deserialize, Serialize};
 
 use crate::handlers::error::ApiError;
-use crate::tasks::task_assignee::TaskWithAssignedUsers;
+use crate::models::task_assignee::TaskWithAssignedUsers;
 use crate::models::user::UserSub;
 use crate::run_async_query;
 use crate::services::user_service::get_user_id_by_email;

@@ -3,9 +3,9 @@ use diesel::prelude::*;
 use diesel::result::Error;
 
 
-use crate::{models::user::User, schema::{sub_tasks, subtask_assignees, tasks::{self}}};
+use crate::{models::{sub_tasks::{NewSubTask, SubTask}, sub_tasks_assignee::{NewSubTaskAssignee, SubTaskWithAssignees}, task::Task, user::User}, schema::{sub_tasks, subtask_assignees, tasks::{self}}};
 
-use super::{enums::{Priority, Progress}, herlpers::{parse_and_validate_created_at, parse_and_validate_due_date}, sub_tasks::{NewSubTask, NewSubTaskAssignee, SubTask, SubTaskWithAssignees}, task::Task, task_error::TaskError};
+use super::{enums::{Priority, Progress}, herlpers::{parse_and_validate_created_at, parse_and_validate_due_date}, task_error::TaskError};
 
 pub fn create_subtask(
     conn: &mut PgConnection,
@@ -106,4 +106,163 @@ pub(crate) fn get_sub_tasks_with_assignees(
         .collect::<Result<Vec<SubTaskWithAssignees>, Error>>()?;
 
     Ok(subtasks_with_assignees)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::database::test_db::TestDb;
+    use crate::services::project_service::create_project;
+    use crate::services::user_service::register_user;
+    use crate::tasks::task_service::create_task;
+
+    use super::*;
+#[test]
+fn create_subtask_success() {
+    let db = TestDb::new();
+    let conn = &mut db.conn();
+
+    let user = register_user(conn, "test user", "testpassword", "test@test.com")
+        .expect("Failed to register user");
+    let project = create_project(conn, "test project", "test project description", &user.id)
+        .expect("Failed to create project");
+    let task = create_task(
+        conn,
+        "test task",
+        100,
+        project.id,
+        user.id,
+        "task title",
+        Some("01-01-2025".to_string()),
+        None,
+    )
+    .expect("Failed to create task");
+
+    let subtask = create_subtask(
+        conn,
+        task.id,
+        "subtask title",
+        "subtask description",
+        Some("01-01-2025".to_string()),
+        None,
+        Priority::Medium,
+        Progress::ToDo,
+        user.id,
+        Some(vec![user.id]),
+    );
+
+    assert!(subtask.is_ok(), "Subtask creation failed when it should have succeeded");
+}
+
+
+#[test]
+fn create_subtask_invalid_task_id() {
+    let db = TestDb::new();
+    let conn = &mut db.conn();
+
+    let user = register_user(conn, "test user", "testpassword", "test@test.com")
+        .expect("Failed to register user");
+
+    let result = create_subtask(
+        conn,
+        999, // Non-existent task ID
+        "subtask title",
+        "subtask description",
+        Some("01-01-2025".to_string()),
+        None,
+        Priority::Medium,
+        Progress::ToDo,
+        user.id,
+        Some(vec![user.id]),
+    );
+
+    assert!(
+        result.is_err(),
+        "Subtask creation succeeded with an invalid task ID"
+    );
+}
+#[test]
+fn get_sub_tasks_success() {
+    let db = TestDb::new();
+    let conn = &mut db.conn();
+
+    let user = register_user(conn, "test user", "testpassword", "test@test.com")
+        .expect("Failed to register user");
+    let project = create_project(conn, "test project", "test project description", &user.id)
+        .expect("Failed to create project");
+    let task = create_task(
+        conn,
+        "test task",
+        100,
+        project.id,
+        user.id,
+        "task title",
+        Some("01-01-2025".to_string()),
+        None,
+    )
+    .expect("Failed to create task");
+
+    create_subtask(
+        conn,
+        task.id,
+        "subtask title",
+        "subtask description",
+        Some("01-01-2025".to_string()),
+        None,
+        Priority::Medium,
+        Progress::ToDo,
+        user.id,
+        None,
+    )
+    .expect("Failed to create subtask");
+
+    let subtasks = get_sub_tasks(conn, user.id).expect("Failed to fetch subtasks");
+
+    assert_eq!(subtasks.len(), 1, "Expected one subtask to be retrieved");
+}
+#[test]
+fn get_sub_tasks_with_assignees_success() {
+    let db = TestDb::new();
+    let conn = &mut db.conn();
+
+    let user = register_user(conn, "test user", "testpassword", "test@test.com")
+        .expect("Failed to register user");
+    let project = create_project(conn, "test project", "test project description", &user.id)
+        .expect("Failed to create project");
+    let task = create_task(
+        conn,
+        "test task",
+        100,
+        project.id,
+        user.id,
+        "task title",
+        Some("01-01-2025".to_string()),
+        None,
+    )
+    .expect("Failed to create task");
+
+    let _subtask = create_subtask(
+        conn,
+        task.id,
+        "subtask title",
+        "subtask description",
+        Some("01-01-2025".to_string()),
+        None,
+        Priority::Medium,
+        Progress::ToDo,
+        user.id,
+        Some(vec![user.id]),
+    )
+    .expect("Failed to create subtask");
+
+    let subtasks_with_assignees =
+        get_sub_tasks_with_assignees(conn, task.id).expect("Failed to fetch subtasks with assignees");
+
+    assert_eq!(subtasks_with_assignees.len(), 1, "Expected one subtask to be retrieved");
+    assert_eq!(
+        subtasks_with_assignees[0].assignees.len(),
+        1,
+        "Expected one assignee for the subtask"
+    );
+}
+
 }
