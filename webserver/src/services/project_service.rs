@@ -61,7 +61,7 @@ mod tests {
 
     use crate::database::test_db::TestDb;
     use crate::services::user_service::register_user;
-    use crate::tasks::task_service::create_task;
+    use crate::services::task_service::create_task;
 
     use super::*;
 

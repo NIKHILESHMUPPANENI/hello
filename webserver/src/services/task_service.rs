@@ -7,9 +7,9 @@ use crate::models::task_assignee::TaskWithAssignedUsers;
 use crate::schema::{tasks, users};
 use crate::schema::tasks::dsl::{id,user_id as task_user_id};
 
-use super::enums::{Priority, Progress};
-use super::herlpers::{ parse_and_validate_created_at, parse_and_validate_due_date};
-use super::task_error::TaskError;
+use crate::tasks::enums::{Priority, Progress};
+use crate::tasks::herlpers::{ parse_and_validate_created_at, parse_and_validate_due_date};
+use crate::tasks::task_error::TaskError;
 
 pub fn create_task(
     conn: &mut PgConnection,

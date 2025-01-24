@@ -5,7 +5,7 @@ use diesel::result::Error;
 
 use crate::{models::{sub_tasks::{NewSubTask, SubTask}, sub_tasks_assignee::{NewSubTaskAssignee, SubTaskWithAssignees}, task::Task, user::User}, schema::{sub_tasks, subtask_assignees, tasks::{self}}};
 
-use super::{enums::{Priority, Progress}, herlpers::{parse_and_validate_created_at, parse_and_validate_due_date}, task_error::TaskError};
+use crate::tasks::{enums::{Priority, Progress}, herlpers::{parse_and_validate_created_at, parse_and_validate_due_date}, task_error::TaskError};
 
 pub fn create_subtask(
     conn: &mut PgConnection,
@@ -113,7 +113,7 @@ mod tests {
     use crate::database::test_db::TestDb;
     use crate::services::project_service::create_project;
     use crate::services::user_service::register_user;
-    use crate::tasks::task_service::create_task;
+    use crate::services::task_service::create_task;
 
     use super::*;
 #[test]

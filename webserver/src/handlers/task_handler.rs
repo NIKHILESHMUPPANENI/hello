@@ -7,9 +7,9 @@ use crate::models::task_assignee::TaskWithAssignedUsers;
 use crate::models::user::UserSub;
 use crate::run_async_query;
 use crate::services::user_service::get_user_id_by_email;
-use crate::tasks::task_service;
+use crate::services::task_service;
 use crate::{auth::auth_middleware, db::DbPool};
-use super::enums::{Priority, Progress};
+use crate::tasks::enums::{Priority, Progress};
 
 #[derive(Serialize, Deserialize)]
 pub struct CreateTaskRequest {

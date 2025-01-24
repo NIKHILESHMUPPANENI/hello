@@ -7,9 +7,9 @@ use crate::handlers::error::ApiError;
 use crate::models::user::UserSub;
 use crate::run_async_query;
 use crate::services::user_service::get_user_id_by_email;
-use crate::tasks::sub_tasks_service;
+use crate::services::sub_tasks_service;
 use crate::{auth::auth_middleware, db::DbPool};
-use super::enums::{Priority, Progress};
+use crate::tasks::enums::{Priority, Progress};
 
 
 #[derive(Serialize, Deserialize)]
@@ -102,7 +102,7 @@ mod tests {
     use crate::handlers::auth_handler::{auth_routes, LoginRequest};
     use crate::services::project_service::create_project;
     use crate::services::user_service::register_user;
-    use crate::tasks::task_service::create_task;
+    use crate::services::task_service::create_task;
     use actix_web::http::StatusCode;
     use actix_web::{test, App};
     use chrono::Utc;

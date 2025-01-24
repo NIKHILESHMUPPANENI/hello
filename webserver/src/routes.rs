@@ -9,8 +9,8 @@ use crate::chat::chat_handler;
 use crate::handlers::auth_handler::auth_routes;
 use crate::handlers::project_handler::project_routes;
 use crate::routes::health_handler::health_routes;
-use crate::tasks::sub_tasks_handler::sub_task_routes;
-use crate::tasks::task_handler::task_routes;
+use crate::handlers::sub_tasks_handler::sub_task_routes;
+use crate::handlers::task_handler::task_routes;
 use crate::{
     chat::{chat_routes::chat_route_auth, get_count},
     handlers::*,
