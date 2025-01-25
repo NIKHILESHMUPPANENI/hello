@@ -7,29 +7,34 @@ use super::{sub_tasks::SubTask, user::User};
 
 #[derive(Insertable)]
 #[diesel(table_name = subtask_assignees)]
-pub struct NewSubTaskAssignee {
+#[diesel(belongs_to(User))]
+#[diesel(belongs_to(Task))]
+#[diesel(primary_key(sub_task_id, user_id))] 
+pub struct SubTaskAssignee {
     pub sub_task_id: i32,
     pub user_id: i32,
+    pub task_id: i32,
+    pub assigned_at: chrono::NaiveDateTime
 }
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubTaskWithAssignees {
-    pub sub_task:SubTask ,
+    pub sub_task: SubTask,
     pub assignees: Vec<User>,
 }
 
-
-//user to sub_task many to many relationship
-impl SubTask {
-    pub fn with_assignees(self, assignees: Vec<User>) -> SubTaskWithAssignees {
-        SubTaskWithAssignees {
-            sub_task: self,
-            assignees,
-        }
-    }
+#[derive(Insertable)]
+#[diesel(table_name = subtask_assignees)]
+pub struct NewSubTaskAssignee {
+    pub sub_task_id: i32,
+    pub user_id: i32,
+    pub task_id: i32,
+    pub assigned_at: Option<chrono::NaiveDateTime>,
 }
-
-impl SubTaskWithAssignees {
-    pub fn new(sub_task: SubTask, assignees: Vec<User>) -> Self {
-        SubTaskWithAssignees { sub_task, assignees }
-    }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SubTaskWithAssignedUsers {
+    pub sub_task:SubTask ,
+    pub assignees: Vec<i32>,
+    pub task_id: i32,
+    pub assigned_at: chrono::NaiveDateTime
 }

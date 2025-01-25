@@ -1,9 +1,11 @@
-use actix_web::{ get, post, web, HttpResponse, Responder, ResponseError};
+use actix_web::{ get,patch,delete, post, web, HttpResponse, Responder, ResponseError};
 
-use diesel::PgConnection;
+use diesel::prelude::*;
+
 use serde::{Deserialize, Serialize};
 
 use crate::handlers::error::ApiError;
+use crate::models::sub_tasks_assignee::SubTaskWithAssignedUsers;
 use crate::models::user::UserSub;
 use crate::run_async_query;
 use crate::services::user_service::get_user_id_by_email;
@@ -25,6 +27,19 @@ pub struct CreateSubTaskRequest {
 
 }
 
+#[derive(Deserialize,Serialize)]
+pub struct UpdateSubTaskRequest {
+    pub title:Option<String>,
+    pub description: Option<String>,
+    pub completed: Option<bool>,
+    pub progress: Option<Progress>,
+    pub priority: Option<Priority>,
+    pub created_at:Option<String>,
+    pub due_date: Option<String>,
+    assigned_users: Option<Vec<i32>>, 
+}
+
+
 pub fn sub_task_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/subtasks")
@@ -32,6 +47,8 @@ pub fn sub_task_routes(cfg: &mut web::ServiceConfig) {
             .service(create_subtask)
             .service(get_sub_tasks)
             .service(get_sub_tasks_with_assignees)
+            .service(update_subtask)
+            .service(delete_subtask)
             
     );
 }
@@ -93,6 +110,61 @@ pub async fn get_sub_tasks_with_assignees(
         sub_tasks_service::get_sub_tasks_with_assignees(conn, id.into_inner()).map_err(DatabaseError::from)
     })?;
     Ok::<HttpResponse, ApiError>(HttpResponse::Ok().json(task))
+}
+
+#[patch("/{task_id}/{sub_task_id}")]
+pub async fn update_subtask(
+    pool: web::Data<DbPool>,
+    path: web::Path<(i32, i32)>,
+    subtask_update: web::Json<UpdateSubTaskRequest>,
+    user_sub: UserSub,
+) -> Result<impl Responder, impl ResponseError> {
+    let (task_id, sub_task_id) = path.into_inner();
+    
+    let updated_subtask = run_async_query!(pool, |conn: &mut diesel::PgConnection| {
+        let user_id = get_user_id_by_email(&user_sub.0, conn).map_err(DatabaseError::from)?;
+
+        // Update the subtask and assigned users
+        let subtask_with_assignees = sub_tasks_service::update_subtask(
+            conn,
+            sub_task_id,
+            task_id,
+            user_id,
+            subtask_update.title.as_deref(),
+            subtask_update.description.as_deref(),
+            subtask_update.completed,
+            subtask_update.progress,
+            subtask_update.priority,
+            subtask_update.created_at.clone(),
+            subtask_update.due_date.clone(),
+            subtask_update.assigned_users.clone(),
+        )
+        .map_err(DatabaseError::from)?;
+
+        Ok::<SubTaskWithAssignedUsers, DatabaseError>(subtask_with_assignees)
+    })?;
+
+    Ok::<HttpResponse, ApiError>(HttpResponse::Ok().json(updated_subtask))
+}
+
+
+#[delete("/{task_id}/{sub_task_id}")]
+pub async fn delete_subtask(
+    pool: web::Data<DbPool>,
+    path: web::Path<(i32, i32)>,
+    user_sub: UserSub,
+) -> Result<impl Responder, impl ResponseError> {
+    let (task_id, sub_task_id) = path.into_inner();
+    
+    run_async_query!(pool, |conn: &mut diesel::PgConnection| {
+        let user_id = get_user_id_by_email(&user_sub.0, conn).map_err(DatabaseError::from)?;
+
+        // Delete the subtask
+        sub_tasks_service::delete_subtask(conn, sub_task_id, task_id, &user_id)
+            .map_err(DatabaseError::from)
+    })?;
+
+    Ok::<HttpResponse, ApiError>(HttpResponse::NoContent().finish())
 }
 
 #[cfg(test)]
@@ -313,4 +385,182 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::OK);
     }
+    #[actix_rt::test]
+async fn update_subtask_success() {
+    let db = TestDb::new();
+    let pool = db::establish_connection(&db.url());
+    dotenv::dotenv().ok();
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(pool.clone()))
+            .configure(auth_routes)
+            .configure(sub_task_routes),
+    )
+    .await;
+
+    let user = register_user(
+        &mut db.conn(),
+        "test user",
+        "testpassword",
+        "test@email.com",
+    )
+    .expect("Failed to register user");
+
+    let project = create_project(
+        &mut db.conn(),
+        "test project",
+        "test project description",
+        &user.id,
+    )
+    .expect("Failed to create project");
+
+    let task = create_task(
+        &mut db.conn(),
+        "initial description",
+        100,
+        project.id,
+        user.id,
+        "initial title",
+        Some("01-01-2000".to_string()),
+        None,
+    )
+    .expect("Failed to create task");
+
+    let subtask = sub_tasks_service::create_subtask(
+        &mut db.conn(),
+        task.id,
+        "initial subtask",
+        "initial subtask description",
+        Some(Utc::now().format("%d-%m-%Y").to_string()),
+        None,
+        Priority::Medium,
+        Progress::ToDo,
+        user.id,
+        Some(vec![user.id]),
+    )
+    .expect("Failed to create subtask");
+
+    let log_req = test::TestRequest::post()
+        .uri("/auth/login")
+        .set_json(&LoginRequest {
+            email: "test@email.com".to_string(),
+            password: "testpassword".to_string(),
+        })
+        .to_request();
+
+    let log_resp = test::call_service(&app, log_req).await;
+
+    assert_eq!(log_resp.status(), StatusCode::OK);
+
+    let auth_header = log_resp
+        .headers()
+        .get("Authorization")
+        .expect("No authorization header")
+        .to_str()
+        .expect("Failed to convert header to string");
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/subtasks/{}/{}", task.id, subtask.id))
+        .append_header(("Authorization", auth_header))
+        .set_json(&UpdateSubTaskRequest {
+            title: Some("Updated subtask title".to_string()),
+            description: Some("Updated subtask description".to_string()),
+            completed: Some(true),
+            progress: Some(Progress::ToDo),
+            priority: Some(Priority::High),
+            created_at: None,
+            due_date: None,
+            assigned_users: Some(vec![user.id]),
+        })
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+#[actix_rt::test]
+async fn delete_subtask_success() {
+    let db = TestDb::new();
+    let pool = db::establish_connection(&db.url());
+    dotenv::dotenv().ok();
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(pool.clone()))
+            .configure(auth_routes)
+            .configure(sub_task_routes),
+    )
+    .await;
+
+    let user = register_user(
+        &mut db.conn(),
+        "test user",
+        "testpassword",
+        "test@email.com",
+    )
+    .expect("Failed to register user");
+
+    let project = create_project(
+        &mut db.conn(),
+        "test project",
+        "test project description",
+        &user.id,
+    )
+    .expect("Failed to create project");
+
+    let task = create_task(
+        &mut db.conn(),
+        "initial description",
+        100,
+        project.id,
+        user.id,
+        "initial title",
+        Some("01-01-2000".to_string()),
+        None,
+    )
+    .expect("Failed to create task");
+
+    let subtask = sub_tasks_service::create_subtask(
+        &mut db.conn(),
+        task.id,
+        "initial subtask",
+        "initial subtask description",
+        Some(Utc::now().format("%d-%m-%Y").to_string()),
+        None,
+        Priority::Medium,
+        Progress::ToDo,
+        user.id,
+        Some(vec![user.id]),
+    )
+    .expect("Failed to create subtask");
+
+    let log_req = test::TestRequest::post()
+        .uri("/auth/login")
+        .set_json(&LoginRequest {
+            email: "test@email.com".to_string(),
+            password: "testpassword".to_string(),
+        })
+        .to_request();
+
+    let log_resp = test::call_service(&app, log_req).await;
+
+    assert_eq!(log_resp.status(), StatusCode::OK);
+
+    let auth_header = log_resp
+        .headers()
+        .get("Authorization")
+        .expect("No authorization header")
+        .to_str()
+        .expect("Failed to convert header to string");
+
+    let req = test::TestRequest::delete()
+        .uri(&format!("/subtasks/{}/{}", task.id, subtask.id))
+        .append_header(("Authorization", auth_header))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+}
 }

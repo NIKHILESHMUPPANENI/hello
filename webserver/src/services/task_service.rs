@@ -100,8 +100,11 @@ pub fn update_task(
 
 
     // Date validation
-    let parsed_created_at = parse_and_validate_created_at(created_at)?;
-    let parsed_due_date = parse_and_validate_due_date(due_date)?;
+    let parsed_created_at = if let Some(date) = &created_at {
+        Some(parse_and_validate_created_at(Some(date.clone()))?)
+    } else {
+        None
+    };    let parsed_due_date = parse_and_validate_due_date(due_date)?;
     
     conn.transaction(|conn| {
         // Update the main task details
@@ -113,12 +116,9 @@ pub fn update_task(
                 title.map(|t| tasks::title.eq(t)),
                 progress.map(|prog| tasks::progress.eq(prog)),
                 priority.map(|pri| tasks::priority.eq(pri)),
-                Some(tasks::created_at.eq(parsed_created_at)),
+                parsed_created_at.map(|dt| tasks::created_at.eq(dt)), 
                 parsed_due_date.map(|dt| tasks::due_date.eq(dt)),
-                // due_date.map(|date| {
-                //     let parsed_date = chrono::NaiveDate::parse_from_str(&date, "%d-%m-%Y").ok();
-                //     parsed_date.and_then(|d| d.and_hms_opt(0, 0, 0))
-                // }).map(|dt| tasks::due_date.eq(dt)),
+               
             ))
             .get_result::<Task>(conn)?;
 

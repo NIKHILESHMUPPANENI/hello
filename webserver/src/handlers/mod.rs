@@ -1,4 +1,3 @@
-use actix_web::ResponseError;
 
 pub mod auth_handler;
 pub mod error;

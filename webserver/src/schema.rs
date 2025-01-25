@@ -68,6 +68,8 @@ diesel::table! {
         id -> Int4,
         sub_task_id -> Int4,
         user_id -> Int4,
+        task_id -> Int4,
+        assigned_at -> Nullable<Timestamp>,
     }
 }
 
@@ -118,6 +120,7 @@ diesel::joinable!(projects -> users (user_id));
 diesel::joinable!(sub_tasks -> tasks (task_id));
 diesel::joinable!(sub_tasks -> users (user_id));
 diesel::joinable!(subtask_assignees -> sub_tasks (sub_task_id));
+diesel::joinable!(subtask_assignees -> tasks (task_id));
 diesel::joinable!(subtask_assignees -> users (user_id));
 diesel::joinable!(task_assignees -> tasks (task_id));
 diesel::joinable!(task_assignees -> users (user_id));
