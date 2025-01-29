@@ -3,7 +3,7 @@ use diesel::prelude::*;
 use diesel::result::Error;
 
 
-use crate::{models::{sub_tasks::{NewSubTask, SubTask}, sub_tasks_assignee::{NewSubTaskAssignee, SubTaskWithAssignees,SubTaskWithAssignedUsers}, task::Task, user::User}, schema::{sub_tasks::{self}, subtask_assignees::{self, sub_task_id}, tasks::{self}}};
+use crate::{models::{sub_tasks::{NewSubTask, SubTask}, sub_tasks_assignee::{NewSubTaskAssignee, SubTaskWithAssignedUsers, SubTaskWithAssignees}, task::Task, user::User}, schema::{sub_tasks::{self}, subtask_assignees::{self, sub_task_id}, tasks::{self}}, tasks::herlpers::{validate_task_ownership, validate_user_project_access}};
 
 use crate::tasks::{enums::{Priority, Progress}, herlpers::{parse_and_validate_created_at, parse_and_validate_due_date}, task_error::TaskError};
 
@@ -26,6 +26,10 @@ pub fn create_subtask(
         .map_err(|_| TaskError {
             message: format!("Task with id {} not found", task_id),
         })?;
+
+        // Ensure the user has access to the project & tasks
+        let task = validate_task_ownership(conn, task_id, user_id)?;
+        let _user_project = validate_user_project_access(conn, user_id, task.project_id)?;
 
     // Parse due date
     let parsed_due_date = parse_and_validate_due_date(due_date)?;
@@ -77,19 +81,25 @@ pub(crate) fn get_sub_tasks(conn: &mut PgConnection, users_id: i32) -> Result<Ve
 
     sub_tasks
         .filter(user_id.eq(users_id))
-        .select(SubTask::as_select()) // Ensure correct Diesel mapping
+        .select(SubTask::as_select()) 
         .load::<SubTask>(conn)
 }
 
 pub(crate) fn get_sub_tasks_with_assignees(
     conn: &mut PgConnection,
     task_id: i32,
+    user_id: i32, 
 ) -> Result<Vec<SubTaskWithAssignees>, Error> {
     use crate::schema::{sub_tasks, subtask_assignees, users};
 
+    // Validate ownership and access
+    let task = validate_task_ownership(conn, task_id, user_id)?;
+    let _user_project = validate_user_project_access(conn, user_id, task.project_id)?;
+
+    // Fetch all subtasks for the given task_id
     let results = sub_tasks::table
-        .filter(sub_tasks::task_id.eq(task_id)) // Filter subtasks by task ID
-        .load::<SubTask>(conn)?; // Load all subtasks for the task
+        .filter(sub_tasks::task_id.eq(task_id))
+        .load::<SubTask>(conn)?;
 
     let subtasks_with_assignees = results
         .into_iter()
@@ -98,8 +108,8 @@ pub(crate) fn get_sub_tasks_with_assignees(
                 .inner_join(subtask_assignees::table.on(subtask_assignees::user_id.eq(users::id)))
                 .filter(subtask_assignees::sub_task_id.eq(subtask.id))
                 .select(users::all_columns)
-                .load::<User>(conn)?; // Load all assigned users for the subtask
-             
+                .load::<User>(conn)?;
+
             Ok(SubTaskWithAssignees {
                 sub_task: subtask,
                 assignees,
@@ -126,6 +136,10 @@ pub fn update_subtask(
     assigned_users: Option<Vec<i32>>,
 ) -> Result<SubTaskWithAssignedUsers, TaskError> {
     use crate::schema::{sub_tasks, subtask_assignees};
+
+    // Ensure the user has access to the project & tasks
+    let task = validate_task_ownership(conn, task_id, user_id)?;
+    let _user_project = validate_user_project_access(conn, user_id, task.project_id)?;
 
     // Validate dates only if `created_at` or `due_date` is provided
     let parsed_created_at = if let Some(date) = &created_at {
@@ -216,6 +230,10 @@ pub fn delete_subtask(
     user_id: &i32,
 ) -> Result<(), Error> {
     use crate::schema::{sub_tasks, subtask_assignees};
+
+// Ensure the user has access to the project & tasks
+let task = validate_task_ownership(conn, task_id, *user_id)?;
+let _user_project = validate_user_project_access(conn, *user_id, task.project_id)?;
 
     // Check if the subtask belongs to the specified task and was created by the user
     let subtask_details: Option<(i32, i32)> = sub_tasks::table
@@ -387,7 +405,7 @@ fn get_sub_tasks_with_assignees_success() {
     .expect("Failed to create subtask");
 
     let subtasks_with_assignees =
-        get_sub_tasks_with_assignees(conn, task.id).expect("Failed to fetch subtasks with assignees");
+        get_sub_tasks_with_assignees(conn, task.id,user.id).expect("Failed to fetch subtasks with assignees");
 
     assert_eq!(subtasks_with_assignees.len(), 1, "Expected one subtask to be retrieved");
     assert_eq!(

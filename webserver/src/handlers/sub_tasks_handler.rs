@@ -102,14 +102,18 @@ pub async fn get_sub_tasks(
 #[get("/{task_id}")]
 pub async fn get_sub_tasks_with_assignees(
     pool: web::Data<DbPool>,
-    id: web::Path<i32>,
+    task_id: web::Path<i32>,
     user_sub: UserSub,
 ) -> Result<impl Responder, ApiError> {
-    let task = run_async_query!(pool, |conn: &mut diesel::PgConnection| {
-        get_user_id_by_email(&user_sub.0, conn).map_err(DatabaseError::from)?;
-        sub_tasks_service::get_sub_tasks_with_assignees(conn, id.into_inner()).map_err(DatabaseError::from)
+    let task_id = task_id.into_inner();
+    let user_email = user_sub.0.clone();
+
+    let sub_tasks_with_assignees = run_async_query!(pool, |conn: &mut diesel::PgConnection| {
+        let user_id = get_user_id_by_email(&user_email, conn).map_err(DatabaseError::from)?; // Get user_id from email
+        sub_tasks_service::get_sub_tasks_with_assignees(conn, task_id, user_id).map_err(DatabaseError::from)
     })?;
-    Ok::<HttpResponse, ApiError>(HttpResponse::Ok().json(task))
+
+    Ok(HttpResponse::Ok().json(sub_tasks_with_assignees))
 }
 
 #[patch("/{task_id}/{sub_task_id}")]

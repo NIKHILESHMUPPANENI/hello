@@ -8,7 +8,7 @@ use crate::schema::{tasks, users};
 use crate::schema::tasks::dsl::{id,user_id as task_user_id};
 
 use crate::tasks::enums::{Priority, Progress};
-use crate::tasks::herlpers::{ parse_and_validate_created_at, parse_and_validate_due_date};
+use crate::tasks::herlpers::{ parse_and_validate_created_at, parse_and_validate_due_date, validate_task_ownership, validate_user_project_access};
 use crate::tasks::task_error::TaskError;
 
 pub fn create_task(
@@ -21,6 +21,9 @@ pub fn create_task(
     created_at: Option<String>,
     due_date: Option<String>,
 ) -> Result<Task, TaskError> {
+
+     // Ensure the user has access to the project
+    let _user_project = validate_user_project_access(conn, user_id, project_id)?;
 
     let parsed_created_at=parse_and_validate_created_at(created_at)?;
 
@@ -61,15 +64,10 @@ pub(crate) fn get_task_by_id(
     task_id: i32,
     user: &i32,
 ) -> Result<TaskWithSubTasks, Error> {
-    //make sure the task is within user project
-    let user_project = crate::schema::projects::table
-        .filter(crate::schema::projects::user_id.eq(user))
-        .first::<crate::models::project::Project>(conn)?;
 
-    let task: Task = crate::schema::tasks::table
-        .filter(crate::schema::tasks::project_id.eq(user_project.id))
-        .find(task_id)
-        .first::<Task>(conn)?;
+        // Ensure the user has access to the project & tasks
+    let task = validate_task_ownership(conn, task_id, *user)?;
+    let _user_project = validate_user_project_access(conn, *user, task.project_id)?;
 
         let associated_subtasks = SubTask::belonging_to(&task)
         .load::<SubTask>(conn)?;
@@ -98,6 +96,9 @@ pub fn update_task(
 ) -> Result<TaskWithAssignedUsers,TaskError> {
     use crate::schema::{tasks, task_assignees};
 
+        // Ensure the user has access to the project & tasks
+        let task = validate_task_ownership(conn, task_id, *user_id)?;
+        let _user_project = validate_user_project_access(conn, *user_id, task.project_id)?;
 
     // Date validation
     let parsed_created_at = if let Some(date) = &created_at {
@@ -159,15 +160,17 @@ pub fn delete_task(
     task_id: i32,
     user_id: &i32,
 ) -> Result<(), Error> {
+
+            // Ensure the user has access to the project & tasks
+            let task = validate_task_ownership(conn, task_id, *user_id)?;
+            let _user_project = validate_user_project_access(conn, *user_id, task.project_id)?;
+
     // Check if the user is the creator of the task
     let task_creator_id: Option<i32> = crate::schema::tasks::table
         .filter(id.eq(task_id))
         .select(task_user_id)
         .first(conn)?;
 
-    if task_creator_id != Some(*user_id) {
-        return Err(Error::NotFound); // Return error if not the creator
-    }
 
     // Delete the task
     diesel::delete(crate::schema::tasks::table.filter(id.eq(task_id))).execute(conn)?;

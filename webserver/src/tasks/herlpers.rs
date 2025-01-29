@@ -1,4 +1,8 @@
 use chrono::{NaiveDateTime, Utc};
+use diesel::prelude::*;
+use diesel::result::Error;
+
+use crate::models::task::Task;
 
 use super::task_error::TaskError;
 
@@ -64,4 +68,31 @@ pub fn parse_and_validate_due_date(due_date: Option<String>) -> Result<Option<Na
     } else {
         Ok(None) // No `due_date` provided
     }
+}
+
+
+pub(crate) fn validate_task_ownership(
+    conn: &mut PgConnection,
+    task_id: i32,
+    user_id: i32,
+) -> Result<Task, Error> {
+    let task = crate::schema::tasks::table
+        .filter(crate::schema::tasks::id.eq(task_id))
+        .filter(crate::schema::tasks::user_id.eq(user_id)) // Ensure the user owns the task
+        .first::<Task>(conn)?;
+
+    Ok(task)
+}
+
+pub(crate) fn validate_user_project_access(
+    conn: &mut PgConnection,
+    user_id: i32,
+    project_id: i32,
+) -> Result<crate::models::project::Project, Error> {
+    let project = crate::schema::projects::table
+        .filter(crate::schema::projects::id.eq(project_id))
+        .filter(crate::schema::projects::user_id.eq(user_id))
+        .first::<crate::models::project::Project>(conn)?;
+
+    Ok(project)
 }
