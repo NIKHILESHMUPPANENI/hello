@@ -1,8 +1,9 @@
 use diesel::prelude::*;
 use diesel::result::Error;
 
+use crate::database::error::DatabaseError;
 use crate::models::sub_tasks::{SubTask, TaskWithSubTasks};
-use crate::models::task::{NewTask, Task};
+use crate::models::task::{ NewTask, Task};
 use crate::models::task_assignee::TaskWithAssignedUsers;
 use crate::schema::{tasks, users};
 use crate::schema::tasks::dsl::{id,user_id as task_user_id};
@@ -22,11 +23,11 @@ pub fn create_task(
     due_date: Option<String>,
 ) -> Result<Task, TaskError> {
 
-     // Ensure the user has access to the project
-    let _user_project = validate_user_project_access(conn, user_id, project_id)?;
+     // Ensure the user has user_project_access
+    validate_user_project_access(conn, user_id, project_id)
+    .map_err(|_| TaskError::from(DatabaseError::PermissionDenied))?;
 
     let parsed_created_at=parse_and_validate_created_at(created_at)?;
-
     let parsed_due_date=parse_and_validate_due_date(due_date)?;
 
         let new_task = NewTask {
@@ -53,32 +54,48 @@ pub fn create_task(
         return  some;
 }
 
-pub(crate) fn get_tasks(conn: &mut PgConnection, users_id: &i32) -> Result<Vec<Task>, Error> {
-    crate::schema::tasks::table
-        .filter(tasks::user_id.eq(users_id))
-        .load(conn)
+pub(crate) fn get_tasks(
+    conn: &mut PgConnection,
+    user_id: &i32,
+) -> Result<Vec<Task>, Error> {
+    use crate::schema::tasks;
+
+    // Fetch all tasks for the user
+    let tasks: Vec<Task> = tasks::table
+        .filter(tasks::user_id.eq(user_id))
+        .load(conn)?;
+
+    // Validate project access for each task
+    let tasks_with_valid_access = tasks.into_iter().filter(|task| {
+        // Validate that the user has access to the project's task
+        validate_user_project_access(conn, *user_id, task.project_id).is_ok()
+    }).collect::<Vec<Task>>();
+
+    Ok(tasks_with_valid_access)
 }
 
 pub(crate) fn get_task_by_id(
     conn: &mut PgConnection,
     task_id: i32,
     user: &i32,
-) -> Result<TaskWithSubTasks, Error> {
+) -> Result<TaskWithSubTasks, DatabaseError> {  // <--- Return DatabaseError instead of DieselError
 
-        // Ensure the user has access to the project & tasks
-    let task = validate_task_ownership(conn, task_id, *user)?;
-    let _user_project = validate_user_project_access(conn, *user, task.project_id)?;
+    // Ensure the user has access to the project & tasks
+    let task = validate_task_ownership(conn, task_id, *user)
+        .map_err(|_| DatabaseError::PermissionDenied)?;  // <--- Don't convert to QueryBuilderError
 
-        let associated_subtasks = SubTask::belonging_to(&task)
-        .load::<SubTask>(conn)?;
+    let _user_project = validate_user_project_access(conn, *user, task.project_id)
+        .map_err(|_| DatabaseError::PermissionDenied)?;  // <--- Keep it consistent
 
-        Ok(TaskWithSubTasks {
-            task,
-            subtasks: associated_subtasks,
-        })
-    // Ok(task)
+    let associated_subtasks = SubTask::belonging_to(&task)
+        .load::<SubTask>(conn)
+        .map_err(DatabaseError::DieselError)?;  // <--- Directly map Diesel errors
+
+    Ok(TaskWithSubTasks {
+        task,
+        subtasks: associated_subtasks,
+    })
 }
-
 
 pub fn update_task(
     conn: &mut PgConnection,
@@ -93,20 +110,22 @@ pub fn update_task(
     created_at: Option<String>,
     due_date: Option<String>,
     assigned_users: Option<Vec<i32>>,
-) -> Result<TaskWithAssignedUsers,TaskError> {
-    use crate::schema::{tasks, task_assignees};
+    assign_access_users: Option<Vec<i32>>,
+) -> Result<TaskWithAssignedUsers, TaskError> {
+    use crate::schema::{tasks, task_assignees, task_access};
 
-        // Ensure the user has access to the project & tasks
-        let task = validate_task_ownership(conn, task_id, *user_id)?;
-        let _user_project = validate_user_project_access(conn, *user_id, task.project_id)?;
+    // Ensure the user has access to the project & tasks
+    let task = validate_task_ownership(conn, task_id, *user_id)?;
+    let _user_project = validate_user_project_access(conn, *user_id, task.project_id)?;
 
     // Date validation
     let parsed_created_at = if let Some(date) = &created_at {
         Some(parse_and_validate_created_at(Some(date.clone()))?)
     } else {
         None
-    };    let parsed_due_date = parse_and_validate_due_date(due_date)?;
-    
+    };
+    let parsed_due_date = parse_and_validate_due_date(due_date)?;
+
     conn.transaction(|conn| {
         // Update the main task details
         let updated_task = diesel::update(tasks::table.filter(tasks::id.eq(task_id).and(tasks::user_id.eq(user_id))))
@@ -117,9 +136,8 @@ pub fn update_task(
                 title.map(|t| tasks::title.eq(t)),
                 progress.map(|prog| tasks::progress.eq(prog)),
                 priority.map(|pri| tasks::priority.eq(pri)),
-                parsed_created_at.map(|dt| tasks::created_at.eq(dt)), 
+                parsed_created_at.map(|dt| tasks::created_at.eq(dt)),
                 parsed_due_date.map(|dt| tasks::due_date.eq(dt)),
-               
             ))
             .get_result::<Task>(conn)?;
 
@@ -139,7 +157,20 @@ pub fn update_task(
                 .values(new_assignments)
                 .execute(conn)?;
         }
-                // Query assigned users
+
+        // Assign access to new users if provided
+        if let Some(users) = assign_access_users {
+            let new_accesses: Vec<_> = users
+                .into_iter()
+                .map(|user_id| (task_access::task_id.eq(task_id), task_access::user_id.eq(user_id)))
+                .collect();
+
+            diesel::insert_into(task_access::table)
+                .values(new_accesses)
+                .execute(conn)?;
+        }
+
+        // Query assigned users
         let assigned_users_query = task_assignees::table
             .inner_join(users::table)
             .filter(task_assignees::task_id.eq(task_id))
@@ -151,22 +182,21 @@ pub fn update_task(
             assigned_users: assigned_users_query,
         })
     })
-        // Ok(updated_task)
-   
 }
+
 
 pub fn delete_task(
     conn: &mut PgConnection,
     task_id: i32,
     user_id: &i32,
-) -> Result<(), Error> {
+) -> Result<(), DatabaseError> {
 
             // Ensure the user has access to the project & tasks
             let task = validate_task_ownership(conn, task_id, *user_id)?;
             let _user_project = validate_user_project_access(conn, *user_id, task.project_id)?;
 
     // Check if the user is the creator of the task
-    let task_creator_id: Option<i32> = crate::schema::tasks::table
+    let _task_creator_id: Option<i32> = crate::schema::tasks::table
         .filter(id.eq(task_id))
         .select(task_user_id)
         .first(conn)?;
@@ -272,10 +302,9 @@ mod tests {
         .id;
 
         let project_id = create_project(&mut db.conn(), "test project", "100", &user_id)
-            .expect("Failed to create project")
-            .id;
+            .expect("Failed to create project");
 
-        let result = create_task(&mut db.conn(), description, reward, project_id,user_id,title,created_at,due_date);
+        let result = create_task(&mut db.conn(), description, reward, project_id.id,user_id,title,created_at,due_date);
         assert!(
             result.is_ok(),
             "Task creation failed when it should have succeeded"
@@ -330,6 +359,7 @@ mod tests {
             created_at.clone(),
             None,
             None,
+            None,
 
         ).expect("faild to update the task");
         
@@ -375,6 +405,7 @@ mod tests {
             None,
             None,
             Some("15-03-2025".to_string()),
+            None,
             None,
         ).unwrap();
         

@@ -74,6 +74,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    task_access (id) {
+        id -> Int4,
+        task_id -> Int4,
+        user_id -> Int4,
+    }
+}
+
+diesel::table! {
     task_assignees (task_id, user_id) {
         task_id -> Int4,
         user_id -> Int4,
@@ -122,6 +130,8 @@ diesel::joinable!(sub_tasks -> users (user_id));
 diesel::joinable!(subtask_assignees -> sub_tasks (sub_task_id));
 diesel::joinable!(subtask_assignees -> tasks (task_id));
 diesel::joinable!(subtask_assignees -> users (user_id));
+diesel::joinable!(task_access -> tasks (task_id));
+diesel::joinable!(task_access -> users (user_id));
 diesel::joinable!(task_assignees -> tasks (task_id));
 diesel::joinable!(task_assignees -> users (user_id));
 diesel::joinable!(tasks -> projects (project_id));
@@ -134,6 +144,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     projects,
     sub_tasks,
     subtask_assignees,
+    task_access,
     task_assignees,
     tasks,
     user_tasks,

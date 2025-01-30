@@ -3,7 +3,7 @@ use diesel::prelude::*;
 use diesel::result::Error;
 
 
-use crate::{models::{sub_tasks::{NewSubTask, SubTask}, sub_tasks_assignee::{NewSubTaskAssignee, SubTaskWithAssignedUsers, SubTaskWithAssignees}, task::Task, user::User}, schema::{sub_tasks::{self}, subtask_assignees::{self, sub_task_id}, tasks::{self}}, tasks::herlpers::{validate_task_ownership, validate_user_project_access}};
+use crate::{ database::error::DatabaseError, models::{sub_tasks::{NewSubTask, SubTask}, sub_tasks_assignee::{NewSubTaskAssignee, SubTaskWithAssignedUsers, SubTaskWithAssignees}, task::Task, user::User}, schema::{sub_tasks::{self}, subtask_assignees::{self}, tasks::{self}}, tasks::herlpers::{validate_task_ownership, validate_user_project_access}};
 
 use crate::tasks::{enums::{Priority, Progress}, herlpers::{parse_and_validate_created_at, parse_and_validate_due_date}, task_error::TaskError};
 
@@ -89,12 +89,11 @@ pub(crate) fn get_sub_tasks_with_assignees(
     conn: &mut PgConnection,
     task_id: i32,
     user_id: i32, 
-) -> Result<Vec<SubTaskWithAssignees>, Error> {
+) -> Result<Vec<SubTaskWithAssignees>, DatabaseError> {
     use crate::schema::{sub_tasks, subtask_assignees, users};
 
     // Validate ownership and access
-    let task = validate_task_ownership(conn, task_id, user_id)?;
-    let _user_project = validate_user_project_access(conn, user_id, task.project_id)?;
+    let _task = validate_task_ownership(conn, task_id, user_id)?;
 
     // Fetch all subtasks for the given task_id
     let results = sub_tasks::table
@@ -138,8 +137,7 @@ pub fn update_subtask(
     use crate::schema::{sub_tasks, subtask_assignees};
 
     // Ensure the user has access to the project & tasks
-    let task = validate_task_ownership(conn, task_id, user_id)?;
-    let _user_project = validate_user_project_access(conn, user_id, task.project_id)?;
+    let _task = validate_task_ownership(conn, task_id, user_id);
 
     // Validate dates only if `created_at` or `due_date` is provided
     let parsed_created_at = if let Some(date) = &created_at {
@@ -228,12 +226,12 @@ pub fn delete_subtask(
     sub_task_id_param: i32,
     task_id: i32,
     user_id: &i32,
-) -> Result<(), Error> {
+) -> Result<(), DatabaseError> {
     use crate::schema::{sub_tasks, subtask_assignees};
 
-// Ensure the user has access to the project & tasks
-let task = validate_task_ownership(conn, task_id, *user_id)?;
-let _user_project = validate_user_project_access(conn, *user_id, task.project_id)?;
+    // Ensure the user has access to the task and the project
+    let task = validate_task_ownership(conn, task_id, *user_id)
+    .map_err(|_| DatabaseError::PermissionDenied)?;
 
     // Check if the subtask belongs to the specified task and was created by the user
     let subtask_details: Option<(i32, i32)> = sub_tasks::table
@@ -242,21 +240,24 @@ let _user_project = validate_user_project_access(conn, *user_id, task.project_id
         .first(conn)
         .optional()?;
 
-    match subtask_details {
-        Some((existing_task_id, existing_user_id)) if existing_task_id == task_id && existing_user_id == *user_id => {
+    // Ensure the subtask belongs to the given task and was created by the user or task access is valid
+    if let Some((existing_task_id, existing_user_id)) = subtask_details {
+        if existing_task_id == task_id && (existing_user_id == *user_id || Some(existing_user_id) == task.user_id) {
             // Delete associated assignees first
-            diesel::delete(subtask_assignees::table.filter(subtask_assignees::sub_task_id.eq(sub_task_id)))
+            diesel::delete(subtask_assignees::table.filter(subtask_assignees::sub_task_id.eq(sub_task_id_param)))
                 .execute(conn)?;
 
             // Delete the subtask
             diesel::delete(sub_tasks::table.filter(sub_tasks::id.eq(sub_task_id_param)))
                 .execute(conn)?;
 
-            Ok(())
-        },
-        _ => Err(Error::NotFound)
+            return Ok(());
+        }
     }
+
+    Err(DatabaseError::NotFound)
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -420,7 +421,6 @@ mod tests {
     use crate::database::test_db::TestDb;
     use crate::services::{project_service, sub_tasks_service, task_service, user_service};
     use chrono::Utc;
-    use diesel::result::Error;
 
     #[test]
     fn test_update_subtask_success() {
@@ -705,7 +705,7 @@ mod tests {
         );
 
         assert!(delete_result.is_err());
-        assert!(matches!(delete_result, Err(Error::NotFound)));
+        assert!(matches!(delete_result, Err(DatabaseError::PermissionDenied)));
     }
 
     #[test]
@@ -788,7 +788,7 @@ mod tests {
         );
 
         assert!(delete_result.is_err());
-        assert!(matches!(delete_result, Err(Error::NotFound)));
+        assert!(matches!(delete_result, Err(DatabaseError::NotFound)));
     }
 }
 

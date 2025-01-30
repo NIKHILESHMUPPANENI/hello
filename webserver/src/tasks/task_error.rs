@@ -2,6 +2,8 @@
 use std::error::Error;
 use std::fmt;
 
+use crate::database::error::DatabaseError;
+
 
 #[derive(Debug)]
 pub struct TaskError {
@@ -17,6 +19,14 @@ impl fmt::Display for TaskError {
 
 impl Error for TaskError {}
 
+impl From<DatabaseError> for TaskError {
+    fn from(error: DatabaseError) -> Self {
+        TaskError {
+            message: format!("Database error: {}", error),
+        }
+    }
+}
+
 impl From<diesel::result::Error> for TaskError {
     fn from(error: diesel::result::Error) -> Self {
         TaskError {
@@ -24,3 +34,4 @@ impl From<diesel::result::Error> for TaskError {
         }
     }
 }
+

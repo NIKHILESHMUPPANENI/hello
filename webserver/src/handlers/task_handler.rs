@@ -31,6 +31,7 @@ pub struct UpdateTaskRequest {
     pub created_at: Option<String>, 
     pub due_date: Option<String>, 
     pub assigned_users: Option<Vec<i32>>, 
+    pub assign_access_users : Option<Vec<i32>>
 }
 
 
@@ -78,12 +79,14 @@ pub async fn get_tasks(
 ) -> Result<impl Responder, impl ResponseError> {
     let ta = run_async_query!(pool, |conn: &mut diesel::PgConnection| {
         // First, get the user ID by email
-        let users_id = get_user_id_by_email(&user_sub.0, conn).map_err(DatabaseError::from)?;
+        let users_id = get_user_id_by_email(&user_sub.0, conn).map_err(DatabaseError::from)?;        
         // Then, retrieve tasks using the user ID
         task_service::get_tasks(conn, &users_id).map_err(DatabaseError::from)
     })?;
     Ok::<HttpResponse, ApiError>(HttpResponse::Ok().json(ta))
 }
+
+
 
 #[get("/{id}")]
 pub async fn get_task_by_id(
@@ -122,6 +125,7 @@ pub async fn update_task(
             task_update.created_at.clone(),
             task_update.due_date.clone(),
             task_update.assigned_users.clone(),
+            task_update.assign_access_users.clone(),
         )
         .map_err(DatabaseError::from)?;
 
@@ -378,6 +382,7 @@ async fn test_update_task_success() {
             created_at:Some("01-01-1999".to_string()),
             due_date: Some("26-12-2029".to_string()),
             assigned_users: Some(vec![]),
+            assign_access_users:Some(vec!())
         })
         .to_request();
 

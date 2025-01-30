@@ -15,8 +15,12 @@ pub enum DatabaseError {
     ConnectionError(#[from] r2d2::PoolError),
     #[error("Diesel error occurred")]
     DieselError(#[from] DieselError),
-    #[error("Data Validation error occurred: {0}")]
+    #[error("Error occurred: {0}")]
     DateValidationError(#[from] TaskError),
+    #[error("Permission Denied")]
+    PermissionDenied,
+    #[error("Resource not found")]
+    NotFound,
 }
 
 impl ResponseError for DatabaseError {
@@ -26,7 +30,8 @@ impl ResponseError for DatabaseError {
 
             DatabaseError::ConnectionError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             DatabaseError::DateValidationError(_) => StatusCode::BAD_REQUEST,
-
+            DatabaseError::PermissionDenied=> StatusCode::UNAUTHORIZED,
+            DatabaseError::NotFound => StatusCode::NOT_FOUND,
             DatabaseError::DieselError(ref err) => match &err {
                 DieselError::DatabaseError(_, _) => StatusCode::CONFLICT,
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
