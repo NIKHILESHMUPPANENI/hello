@@ -1,3 +1,6 @@
+"use client";
+
+import React, { useState } from "react";
 import {
   Card,
   CardHeader,
@@ -7,16 +10,20 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { MdDragIndicator } from "react-icons/md"; // Import drag indicator icon
+import { PopupCalendar } from "./calendarpopup";
+import { Button } from "@/components/ui/button";
+import { FaCalendarAlt } from "react-icons/fa";
 
 interface HomeCardProps {
   title: string;
   description: string;
-  content?: React.ReactNode; // Optional content for the card
-  footer?: React.ReactNode; // Optional footer for the card
-  emptyState?: React.ReactNode; // Render when there's no content
-  className?: string; // Optional custom class for the card
-  height?: string; // Optional height for the card
-  topRightIcons?: React.ReactNode[]; // Array of icons for the top-right corner
+  content?: React.ReactNode; 
+  footer?: React.ReactNode; 
+  emptyState?: React.ReactNode; 
+  className?: string; 
+  height?: string; 
+  topRightIcons?: React.ReactNode[]; 
+  onAddAgendaContent?: (date: string, time: string) => void; 
 }
 
 const HomeCard: React.FC<HomeCardProps> = ({
@@ -28,7 +35,10 @@ const HomeCard: React.FC<HomeCardProps> = ({
   className = "",
   height = "h-72",
   topRightIcons = [],
+  onAddAgendaContent,
 }) => {
+  const [showPopup, setShowPopup] = useState(false);
+
   return (
     <div className="relative rounded-xl p-[1.3px] bg-gradient-to-b from-black to-purple-400">
       <Card
@@ -48,17 +58,34 @@ const HomeCard: React.FC<HomeCardProps> = ({
 
             {/* Top-right Icons */}
             <div className="flex space-x-3">
-              {topRightIcons.map((icon, index) => (
-                <span key={index} className="text-gray-500">
-                  {icon}
-                </span>
-              ))}
+            {topRightIcons.map((icon, index) => {
+                // If the icon is FaCalendarAlt, attach onClick to open popup
+                if (React.isValidElement(icon) && icon.type === FaCalendarAlt) {
+                  return (
+                    <Button key={index} variant="ghost" onClick={() => {
+                      console.log("Calendar icon clicked, opening popup...");
+                      setShowPopup((prev) => {
+                        console.log("Previous showPopup state:", prev);
+                        return true;
+                        
+                      });
+                    }}>
+                      <FaCalendarAlt size={16} className="text-gray-500" />
+                    </Button>
+                  );
+                }
+                return (
+                  <span key={index} className="text-gray-500">
+                    {icon}
+                  </span>
+                );
+              })}
             </div>
           </div>
         </CardHeader>
 
         {/* Content */}
-        <CardContent className="p-4 space-y-4 h-48 overflow-y-auto">
+        <CardContent className="p-4 pt-2 space-y-4 h-48 overflow-y-auto">
           {/* Ensure content or empty state renders here */}
           {content ? content : emptyState ? emptyState : <p>No content available</p>}
         </CardContent>
@@ -66,6 +93,9 @@ const HomeCard: React.FC<HomeCardProps> = ({
         {/* Footer */}
         {footer && <CardFooter className="p-4 border-t mt-4">{footer}</CardFooter>}
       </Card>
+
+ 
+      {showPopup && <PopupCalendar onClose={() => setShowPopup(false)} onAddAgendaContent={onAddAgendaContent} />}
     </div>
   );
 };
@@ -74,7 +104,3 @@ export default HomeCard;
 
 
 
-
-  
-  
-  

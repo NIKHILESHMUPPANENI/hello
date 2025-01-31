@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PopupCalendar } from "./components/calendarpopup";
 
 export default function Page() {
   const [cardStates, setCardStates] = useState([
@@ -22,10 +23,12 @@ export default function Page() {
     { title: "Assigned to me", hasContent: false },
   ]);
 
-  const [showCalendar, setShowCalendar] = useState(false);
-  const toggleCalendarPopup = () => {
-    setShowCalendar((prev) => !prev); // Toggle the calendar popup visibility
-  };
+
+  const [selectedDate, setSelectedDate] = useState<{ date: string; time: string } | null>(null);
+  const [EventTitle, setEventTitle] = useState(null)
+
+
+
 
   const handleAddContent = (index: number) => {
     setCardStates((prevStates) =>
@@ -34,6 +37,17 @@ export default function Page() {
       )
     );
   };
+
+  const handleAddAgendaContent = (date: string, time: string) => {
+    setCardStates((prevStates) =>
+      prevStates.map((card, index) =>
+        index === 1 ? { ...card, hasContent: true } : card
+      )
+    );
+    setSelectedDate({ date, time });
+    setEventTitle
+  };
+
   const CreateButton = ({ onRemoveCard }: { onRemoveCard?: () => void }) => {
     return (
       <DropdownMenu>
@@ -162,7 +176,7 @@ export default function Page() {
         <div className="space-y-4">
           {/* Date Navigation */}
           <div className="flex justify-between items-center text-gray-500">
-            <span className="text-sm border-b-2 border-purple-500 focus:outline-none">Dec 5, 2024</span>
+            <span className="text-sm border-b-2 border-purple-500 focus:outline-none">{selectedDate ? selectedDate.date : "No date selected"}</span>
             <div className="flex items-center space-x-2">
               <button className="p-1 pt-0 pb-0">
                 <span className="text-lg">&lt;</span>
@@ -180,18 +194,18 @@ export default function Page() {
               <div className="flex items-center space-x-2">
                 <input type="checkbox" className="form-checkbox" />
                 <div>
-                  <p className="font-semibold">Dec 17, Tue</p>
+                  <p className="font-semibold">{selectedDate ? selectedDate.date : "No meeting scheduled"}</p>
                   <p className="text-sm text-gray-500">Weekly check up</p>
                 </div>
               </div>
-              <span className="text-sm text-gray-500">Oct 23th at 12:30</span>
+              <span className="text-sm text-gray-500">{selectedDate ? `Meeting at ${selectedDate.time}` : ""}</span>
             </li>
           </ul>
         </div>
       ) : null,
       emptyState: (
         <div className="flex flex-col items-center justify-center space-y-4">
-          <FaCalendarAlt className="text-purple-500 text-4xl" onClick={toggleCalendarPopup}/> {/* Calendar icon */}
+          <FaCalendarAlt className="text-purple-500 text-4xl"/> {/* Calendar icon */}
           <p className="text-gray-500 text-center">
             Here you can book meetings and view all booked meetings.
           </p>
@@ -205,7 +219,7 @@ export default function Page() {
         </div>
       ),
       topRightIcons: [
-        <FaCalendarAlt size={16} onClick={toggleCalendarPopup}/>,
+        <FaCalendarAlt key="calendar" size={16} className="text-gray-500" />,
         <CreateButton />,
       ],
     },
@@ -219,8 +233,8 @@ export default function Page() {
             <button className="text-black font-semibold border-b-2 border-purple-500 focus:outline-none">
               To do
             </button>
-            <button className="text-gray-500 focus:outline-none">Done</button>
-            <button className="text-gray-500 focus:outline-none">Delegated</button>
+            <button className="text-gray-500 focus:outline-none">In Progress</button>
+            <button className="text-gray-500 focus:outline-none">Completed</button>
           </div>
 
           {/* To Do Section */}
@@ -325,6 +339,7 @@ export default function Page() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-4">
+                        <span className="text-gray-500 text-sm">Assigned to me: </span>
                         {/* Assignees */}
                         <div className="flex -space-x-2">
                           {task.assignees.map((assignee, i) => (
@@ -393,14 +408,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* Calendar Popup */}
-      {showCalendar && (
-        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 shadow-lg">
-            <CalendarPopup onClose={toggleCalendarPopup} />
-          </div>
-        </div>
-      )}
 
       {/* Card Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto">
@@ -412,9 +419,12 @@ export default function Page() {
             content={card.content}
             emptyState={card.emptyState}
             topRightIcons={card.topRightIcons}
+            onAddAgendaContent={handleAddAgendaContent}
           />
         ))}
       </div>
+
+      
     </div>
   );
 }
