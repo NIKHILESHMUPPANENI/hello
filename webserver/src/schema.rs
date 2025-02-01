@@ -37,6 +37,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    meetings (id) {
+        id -> Int4,
+        user_id -> Int4,
+        start_date -> Timestamp,
+        end_date -> Timestamp,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     projects (id) {
         id -> Int4,
         user_id -> Int4,
@@ -124,6 +135,7 @@ diesel::table! {
 }
 
 diesel::joinable!(jobs -> users (user_id));
+diesel::joinable!(meetings -> users (user_id));
 diesel::joinable!(projects -> users (user_id));
 diesel::joinable!(sub_tasks -> tasks (task_id));
 diesel::joinable!(sub_tasks -> users (user_id));
@@ -141,6 +153,7 @@ diesel::joinable!(user_tasks -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     jobs,
+    meetings,
     projects,
     sub_tasks,
     subtask_assignees,
