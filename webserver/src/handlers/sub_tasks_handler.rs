@@ -19,7 +19,6 @@ pub struct CreateSubTaskRequest {
     task_id:i32,
     title:String,
     description: String,
-    created_at:Option<String>,
     due_date: Option<String>,
     priority: Priority,
     progress: Progress,
@@ -34,7 +33,6 @@ pub struct UpdateSubTaskRequest {
     pub completed: Option<bool>,
     pub progress: Option<Progress>,
     pub priority: Option<Priority>,
-    pub created_at:Option<String>,
     pub due_date: Option<String>,
     assigned_users: Option<Vec<i32>>, 
 }
@@ -70,7 +68,6 @@ pub async fn create_subtask(
             subtask.task_id,
             &subtask.title,
             &subtask.description,
-            subtask.created_at.clone(),
             subtask.due_date.clone(),
             subtask.priority,
             subtask.progress,
@@ -139,7 +136,6 @@ pub async fn update_subtask(
             subtask_update.completed,
             subtask_update.progress,
             subtask_update.priority,
-            subtask_update.created_at.clone(),
             subtask_update.due_date.clone(),
             subtask_update.assigned_users.clone(),
         )
@@ -181,7 +177,6 @@ mod tests {
     use crate::services::task_service::create_task;
     use actix_web::http::StatusCode;
     use actix_web::{test, App};
-    use chrono::Utc;
 
     use super::*;
 
@@ -223,7 +218,6 @@ mod tests {
             project.id,
             user.id,
             "initial title",
-            Some("01-01-2000".to_string()),
             None,
         )
         .expect("Failed to create task");
@@ -254,7 +248,6 @@ mod tests {
                 task_id:task_id.id, 
                 title: "Subtask title".to_string(),
                 description: "Subtask description".to_string(),
-                created_at: Some(Utc::now().format("%d-%m-%Y").to_string()),
                 due_date: None,
                 priority: Priority::Medium,
                 progress: Progress::ToDo,
@@ -356,7 +349,6 @@ mod tests {
             project.id,
             user.id,
             "initial title",
-            Some("01-01-2000".to_string()),
             None,
         )
         .expect("Failed to create task");
@@ -426,7 +418,6 @@ async fn update_subtask_success() {
         project.id,
         user.id,
         "initial title",
-        Some("01-01-2000".to_string()),
         None,
     )
     .expect("Failed to create task");
@@ -436,7 +427,6 @@ async fn update_subtask_success() {
         task.id,
         "initial subtask",
         "initial subtask description",
-        Some(Utc::now().format("%d-%m-%Y").to_string()),
         None,
         Priority::Medium,
         Progress::ToDo,
@@ -473,7 +463,6 @@ async fn update_subtask_success() {
             completed: Some(true),
             progress: Some(Progress::ToDo),
             priority: Some(Priority::High),
-            created_at: None,
             due_date: None,
             assigned_users: Some(vec![user.id]),
         })
@@ -520,7 +509,6 @@ async fn delete_subtask_success() {
         project.id,
         user.id,
         "initial title",
-        Some("01-01-2000".to_string()),
         None,
     )
     .expect("Failed to create task");
@@ -530,7 +518,6 @@ async fn delete_subtask_success() {
         task.id,
         "initial subtask",
         "initial subtask description",
-        Some(Utc::now().format("%d-%m-%Y").to_string()),
         None,
         Priority::Medium,
         Progress::ToDo,

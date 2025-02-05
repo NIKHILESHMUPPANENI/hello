@@ -17,7 +17,6 @@ pub struct CreateTaskRequest {
     reward: i64,
     project_id: i32,
     title:String,
-    created_at:Option<String>,
     due_date: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
@@ -28,7 +27,6 @@ pub struct UpdateTaskRequest {
     pub title: Option<String>,
     pub progress: Option<Progress>,
     pub priority: Option<Priority>,
-    pub created_at: Option<String>, 
     pub due_date: Option<String>, 
     pub assigned_users: Option<Vec<i32>>, 
     pub assign_access_users : Option<Vec<i32>>
@@ -57,7 +55,8 @@ pub async fn create_task(
     let create_task = run_async_query!(pool, |conn: &mut diesel::PgConnection| {
         // Use the service method to get user ID
         let user_id = get_user_id_by_email(&user_sub.0, conn).map_err(DatabaseError::from)?;
-        
+        // let parsed_due_date = parse_and_validate_due_date(task.due_date.clone())?;
+
         task_service::create_task(
             conn, 
             &task.description, 
@@ -65,7 +64,6 @@ pub async fn create_task(
             task.project_id,
             user_id,
             &task.title,
-            task.created_at.clone(),
             task.due_date.clone()
         ).map_err(DatabaseError::from)
     })?;
@@ -122,7 +120,6 @@ pub async fn update_task(
             task_update.title.as_deref(),
             task_update.progress,
             task_update.priority,
-            task_update.created_at.clone(),
             task_update.due_date.clone(),
             task_update.assigned_users.clone(),
             task_update.assign_access_users.clone(),
@@ -161,7 +158,6 @@ mod tests {
     use crate::services::user_service::register_user;
     use actix_web::http::StatusCode;
     use actix_web::{test, App};
-    use chrono::Utc;
 
     use super::*;
 
@@ -182,7 +178,6 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title = "Task title";
-        let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
         let due_date = None;
 
 
@@ -221,7 +216,7 @@ mod tests {
                 reward,
                 project_id: 1,
                 title: title.to_string(),
-                created_at,
+                // created_at,
                 due_date
             })
             .to_request();
@@ -248,7 +243,6 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title = "Task title";
-        let created_at = Some("01-01-2000".to_string());
         let due_date = Some("25-12-3024".to_string());
 
         let user = register_user(
@@ -294,7 +288,6 @@ mod tests {
                 reward,
                 project_id: project.id,
                 title: title.to_string(),
-                created_at,
                 due_date,
             })
             .to_request();
@@ -344,7 +337,6 @@ async fn test_update_task_success() {
         project.id,
         user.id,
         "initial title",
-        Some(Utc::now().format("%d-%m-%Y").to_string()),
         None,
     )
     .expect("Failed to create task");
@@ -379,7 +371,6 @@ async fn test_update_task_success() {
             title: Some("updated title".to_string()),
             progress: Some(Progress::Completed),
             priority: Some(Priority::High),
-            created_at:Some("01-01-1999".to_string()),
             due_date: Some("26-12-2029".to_string()),
             assigned_users: Some(vec![]),
             assign_access_users:Some(vec!())
@@ -442,7 +433,6 @@ async fn test_delete_task_success() {
         project.id,
         user.id,
         "initial title",
-        Some("01-01-2000".to_string()),
         None,
     )
     .expect("Failed to create task");

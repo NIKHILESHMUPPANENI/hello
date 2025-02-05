@@ -6,30 +6,30 @@ use crate::database::error::DatabaseError;
 
 
 #[derive(Debug)]
-pub struct TaskError {
+pub struct ValidationError {
     pub(crate) message: String,
    
 }
 
-impl fmt::Display for TaskError {
+impl fmt::Display for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.message)
     }
 }
 
-impl Error for TaskError {}
+impl Error for ValidationError {}
 
-impl From<DatabaseError> for TaskError {
+impl From<DatabaseError> for ValidationError {
     fn from(error: DatabaseError) -> Self {
-        TaskError {
+        ValidationError {
             message: format!("Database error: {}", error),
         }
     }
 }
 
-impl From<diesel::result::Error> for TaskError {
+impl From<diesel::result::Error> for ValidationError {
     fn from(error: diesel::result::Error) -> Self {
-        TaskError {
+        ValidationError {
             message: format!("Database error: {}", error),
         }
     }

@@ -9,8 +9,8 @@ use crate::schema::{tasks, users};
 use crate::schema::tasks::dsl::{id,user_id as task_user_id};
 
 use crate::tasks::enums::{Priority, Progress};
-use crate::tasks::herlpers::{ parse_and_validate_created_at, parse_and_validate_due_date, validate_task_ownership, validate_user_project_access};
-use crate::tasks::task_error::TaskError;
+use crate::tasks::helpers::{ parse_and_validate_due_date, validate_task_ownership, validate_user_project_access};
+use crate::tasks::error::ValidationError;
 
 pub fn create_task(
     conn: &mut PgConnection,
@@ -19,16 +19,15 @@ pub fn create_task(
     project_id: i32,
     user_id: i32,
     title: &str,
-    created_at: Option<String>,
     due_date: Option<String>,
-) -> Result<Task, TaskError> {
+) -> Result<Task, ValidationError> {
 
      // Ensure the user has user_project_access
     validate_user_project_access(conn, user_id, project_id)
-    .map_err(|_| TaskError::from(DatabaseError::PermissionDenied))?;
+    .map_err(|_| ValidationError::from(DatabaseError::PermissionDenied))?;
 
-    let parsed_created_at=parse_and_validate_created_at(created_at)?;
-    let parsed_due_date=parse_and_validate_due_date(due_date)?;
+    // let timezone = Some("Europe/Stockholm".to_string()); <== hardcoded value for testing
+    let parsed_due_date=parse_and_validate_due_date(due_date,None)?;
 
         let new_task = NewTask {
         description,
@@ -39,7 +38,7 @@ pub fn create_task(
         title,
         progress: Progress::ToDo,
         priority: Priority::Medium,
-        created_at: parsed_created_at,
+        created_at: chrono::Utc::now().naive_utc(),
         due_date: parsed_due_date,
     };
 
@@ -47,7 +46,7 @@ pub fn create_task(
         .values(&new_task)
         .returning(Task::as_returning())
         .get_result(conn)
-        .map_err(|e| TaskError {
+        .map_err(|e| ValidationError {
             message: format!("Database error: {}", e),
 
         });
@@ -78,18 +77,18 @@ pub(crate) fn get_task_by_id(
     conn: &mut PgConnection,
     task_id: i32,
     user: &i32,
-) -> Result<TaskWithSubTasks, DatabaseError> {  // <--- Return DatabaseError instead of DieselError
+) -> Result<TaskWithSubTasks, DatabaseError> {  
 
     // Ensure the user has access to the project & tasks
     let task = validate_task_ownership(conn, task_id, *user)
-        .map_err(|_| DatabaseError::PermissionDenied)?;  // <--- Don't convert to QueryBuilderError
+        .map_err(|_| DatabaseError::PermissionDenied)?;  
 
     let _user_project = validate_user_project_access(conn, *user, task.project_id)
-        .map_err(|_| DatabaseError::PermissionDenied)?;  // <--- Keep it consistent
+        .map_err(|_| DatabaseError::PermissionDenied)?;  
 
     let associated_subtasks = SubTask::belonging_to(&task)
         .load::<SubTask>(conn)
-        .map_err(DatabaseError::DieselError)?;  // <--- Directly map Diesel errors
+        .map_err(DatabaseError::DieselError)?;  
 
     Ok(TaskWithSubTasks {
         task,
@@ -107,24 +106,17 @@ pub fn update_task(
     title: Option<&str>,
     progress: Option<Progress>,
     priority: Option<Priority>,
-    created_at: Option<String>,
     due_date: Option<String>,
     assigned_users: Option<Vec<i32>>,
     assign_access_users: Option<Vec<i32>>,
-) -> Result<TaskWithAssignedUsers, TaskError> {
+) -> Result<TaskWithAssignedUsers, ValidationError> {
     use crate::schema::{tasks, task_assignees, task_access};
 
     // Ensure the user has access to the project & tasks
     let task = validate_task_ownership(conn, task_id, *user_id)?;
     let _user_project = validate_user_project_access(conn, *user_id, task.project_id)?;
 
-    // Date validation
-    let parsed_created_at = if let Some(date) = &created_at {
-        Some(parse_and_validate_created_at(Some(date.clone()))?)
-    } else {
-        None
-    };
-    let parsed_due_date = parse_and_validate_due_date(due_date)?;
+    let parsed_due_date = parse_and_validate_due_date(due_date,None)?;
 
     conn.transaction(|conn| {
         // Update the main task details
@@ -136,7 +128,7 @@ pub fn update_task(
                 title.map(|t| tasks::title.eq(t)),
                 progress.map(|prog| tasks::progress.eq(prog)),
                 priority.map(|pri| tasks::priority.eq(pri)),
-                parsed_created_at.map(|dt| tasks::created_at.eq(dt)),
+                // parsed_created_at.map(|dt| tasks::created_at.eq(dt)),
                 parsed_due_date.map(|dt| tasks::due_date.eq(dt)),
             ))
             .get_result::<Task>(conn)?;
@@ -210,7 +202,7 @@ pub fn delete_task(
 
 #[cfg(test)]
 mod tests {
-    use chrono::{NaiveDateTime, Utc};
+    use chrono::NaiveDateTime;
     use crate::database::test_db::TestDb;
     use crate::services::project_service::create_project;
     use crate::services::user_service::register_user;
@@ -224,7 +216,6 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title : &str= "Test Title";
-        let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
         let due_date = Some("25-12-3044".to_string());
 
         let user_id = register_user(
@@ -236,7 +227,7 @@ mod tests {
         .expect("Failed to register user")
         .id;
 
-        let result = create_task(&mut db.conn(), description, reward, 1,user_id,title,created_at,due_date);
+        let result = create_task(&mut db.conn(), description, reward, 1, user_id, title, due_date);
 
         assert!(
             result.is_err(),
@@ -253,7 +244,6 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title = "Title test";
-        let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
         let due_date = None;
 
 
@@ -270,7 +260,8 @@ mod tests {
             .expect("Failed to create project")
             .id;
 
-        let result = create_task(&mut db.conn(), description, reward, project_id,user_id,title,created_at,due_date);
+        let result = create_task(&mut db.conn(), description, reward, project_id,user_id,title,due_date);
+
         assert!(
             result.is_ok(),
             "Task creation failed when it should have succeeded"
@@ -288,7 +279,6 @@ mod tests {
         let description = "test task";
         let reward = 100;
         let title = "title test";
-        let created_at = Some("01-01-2025".to_string());
         let due_date = None;
 
 
@@ -304,7 +294,8 @@ mod tests {
         let project_id = create_project(&mut db.conn(), "test project", "100", &user_id)
             .expect("Failed to create project");
 
-        let result = create_task(&mut db.conn(), description, reward, project_id.id,user_id,title,created_at,due_date);
+        let result = create_task(&mut db.conn(), description, reward, project_id.id,user_id,title,due_date);
+
         assert!(
             result.is_ok(),
             "Task creation failed when it should have succeeded"
@@ -324,7 +315,6 @@ mod tests {
 
         let reward = 100;
         let title = "test title";
-        let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
         let due_date =None;
 
         
@@ -342,7 +332,7 @@ mod tests {
         .expect("Failed to create project")
         .id;
 
-        let task = create_task(&mut db.conn(), "original_Description", reward, project_id, user_id,title, created_at.clone(),due_date);
+        let task = create_task(&mut db.conn(), "original_Description", reward, project_id, user_id,title,due_date);
 
 
         // Call patch_task to update description
@@ -356,7 +346,6 @@ mod tests {
             None,
             None,
             None,
-            created_at.clone(),
             None,
             None,
             None,
@@ -373,7 +362,6 @@ mod tests {
         let db = TestDb::new();
          let reward = 100;
         let title = "test title";
-        let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
         let due_date =None;
         
         let user_id = register_user(
@@ -389,7 +377,7 @@ mod tests {
         .expect("Failed to create project")
         .id;
 
-        let task = create_task(&mut db.conn(), "original_Description", reward, project_id, user_id,title,created_at, due_date);
+        let task = create_task(&mut db.conn(), "original_Description", reward, project_id, user_id,title, due_date);
 
 
         // Call patch_task to update due date
@@ -403,7 +391,7 @@ mod tests {
             None,
             None,
             None,
-            None,
+            // None,
             Some("15-03-2025".to_string()),
             None,
             None,
@@ -421,7 +409,6 @@ fn test_delete_task() {
     
     let reward = 100;
     let title = "test title";
-    let created_at=Some(Utc::now().format("%d-%m-%Y").to_string());
     let due_date = None;
 
     let user_id = register_user(
@@ -445,7 +432,6 @@ fn test_delete_task() {
         project_id,
         user_id,
         title,
-        created_at,
         due_date,
     )
     .expect("Failed to create task");

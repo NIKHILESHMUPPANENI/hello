@@ -1,72 +1,92 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::{ NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
 use diesel::prelude::*;
 
 use crate::database::error::DatabaseError;
 use crate::models::task::Task;
 use crate::models::task_accsses::TaskAccess;
 
-use super::task_error::TaskError;
+use super::error::ValidationError;
 
-pub fn parse_and_validate_created_at(
-    created_at: Option<String>,
-) -> Result<NaiveDateTime, TaskError> {
-    // If no date is provided, use the current UTC time.
-    let parsed_date = match created_at {
-        Some(date_str) => {
-            NaiveDateTime::parse_from_str(
-                &format!("{} 00:00:00", date_str),
-                "%d-%m-%Y %H:%M:%S",
-            )
-            .map_err(|_| TaskError {
-                message: format!(
-                    "Invalid 'created_at' format: '{}' is not in the expected format 'DD-MM-YYYY'.",
-                    date_str
-                ),
-            })?
-        }
-        None => Utc::now().naive_utc(), // Default value only if no date is provided
+use chrono_tz::Tz;  
+
+
+pub fn parse_and_validate_due_date(
+    due_date: Option<String>,
+    user_timezone_str: Option<String>,  
+) -> Result<Option<NaiveDateTime>, ValidationError> {
+    
+    let user_timezone = match user_timezone_str {
+        Some(tz) => tz.parse::<Tz>().map_err(|_| ValidationError {
+            message: format!("Invalid timezone: '{}'", tz),
+        })?,
+        None => "UTC".parse::<Tz>().unwrap(), // Default to UTC if not provided
     };
 
-    // Check if the date is in the future
-    if parsed_date > Utc::now().naive_utc() {
-        return Err(TaskError {
-            message: format!(
-                "Invalid 'created_at': {} is in the future. Please provide a valid past or present date.",
-                parsed_date
-            ),
-        });
-    }
-
-    Ok(parsed_date)
-}
-
-
-pub fn parse_and_validate_due_date(due_date: Option<String>) -> Result<Option<NaiveDateTime>, TaskError> {
     if let Some(date_str) = due_date {
-        let parsed_date = NaiveDateTime::parse_from_str(
-            &format!("{} 00:00:00", date_str),
-            "%d-%m-%Y %H:%M:%S",
-        )
-        .map_err(|_| TaskError {
+        // Parse date and time dynamically, including seconds if available
+        let parsed_date = if date_str.contains(':') {
+            // Format: DD-MM-YYYY HH:mm (HH:mm might be optional)
+            NaiveDateTime::parse_from_str(&date_str, "%d-%m-%Y %H:%M")
+                .map(|dt| {
+                    // Extract hour, minute, and second dynamically
+                    let hour = dt.time().hour();
+                    let minute = dt.time().minute();
+                    let second = dt.time().second(); 
+                    let microsecond = dt.time().nanosecond() / 1000;
+
+                    // Convert to full format with microseconds
+                    NaiveDateTime::new(
+                        dt.date(),
+                        NaiveTime::from_hms_micro_opt(hour, minute, second, microsecond).unwrap()
+                    )
+                })
+        } else {
+            // Format: DD-MM-YYYY (No time, set to 00:00:00.000000)
+            NaiveDate::parse_from_str(&date_str, "%d-%m-%Y")
+                .map(|date| {
+                    NaiveDateTime::new(
+                        date,
+                        NaiveTime::from_hms_micro_opt(0, 0, 0, 0).unwrap() 
+                    )
+                })
+        }
+        .map_err(|_| ValidationError {
             message: format!(
-                "Invalid 'due_date': '{}' is not in the expected format 'DD-MM-YYYY'.",
+                "Invalid due_date format: '{}'. Expected formats:\n\
+                 - DD-MM-YYYY HH:mm\n\
+                 - DD-MM-YYYY",
                 date_str
             ),
         })?;
 
-        if parsed_date < Utc::now().naive_utc() {
-            return Err(TaskError {
-                message: format!(
-                    "Invalid 'due_date': {} is in the past. Please provide a future date.",
-                    parsed_date
-                ),
+        // Step 2: Convert the due date to UTC using the user timezone
+        let utc_due_date = convert_to_utc(parsed_date, &user_timezone);
+
+        // Step 3: Ensure the date is in the future
+        if utc_due_date < Utc::now().naive_utc() {
+            return Err(ValidationError {
+                message: format!("Invalid due_date: {} ,please provide a future date.", utc_due_date),
             });
         }
 
-        Ok(Some(parsed_date))
+        Ok(Some(utc_due_date))
     } else {
-        Ok(None) // No `due_date` provided
+        Ok(None) // No due_date provided
     }
+}
+
+// Convert the parsed due date (in user's local time) to UTC
+fn convert_to_utc(due_date: NaiveDateTime, user_timezone: &Tz) -> NaiveDateTime {
+    let local_time = user_timezone
+        .from_local_datetime(&due_date)
+        .single()
+        .expect("Invalid local datetime");
+
+    // Convert local time to UTC
+    let utc_time = local_time.with_timezone(&Utc);
+
+    // Return UTC time as NaiveDateTime (which does not store timezone info)
+    utc_time.naive_utc()
 }
 
 
