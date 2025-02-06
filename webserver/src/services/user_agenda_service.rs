@@ -104,3 +104,239 @@ pub fn delete_meeting(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+    use crate::database::test_db::TestDb;
+    use crate::services::user_service::register_user;
+
+    use super::*;
+
+    #[test]
+    fn test_create_meeting_success() {
+        let db = TestDb::new();
+        
+        let user_id_test = register_user(
+            &mut db.conn(),
+            "test user",
+            "password123",
+            "test@example.com",
+        )
+        .expect("Failed to register user")
+        .id;
+
+        let start_date_val = Utc::now().naive_utc()+ chrono::Duration::seconds(5);
+        let end_date_val = start_date_val + chrono::Duration::hours(1);
+
+        let result = create_meeting(&mut db.conn(), user_id_test, start_date_val, end_date_val);
+
+        assert!(result.is_ok(), "Meeting creation failed when it should have succeeded");
+
+        let meeting = result.unwrap();
+        assert_eq!(meeting.user_id, user_id_test);
+        assert_eq!(meeting.start_date, start_date_val);
+        assert_eq!(meeting.end_date, end_date_val);
+    }
+
+    #[test]
+    fn test_create_meeting_invalid_dates() {
+        let db = TestDb::new();
+
+        let user_id_val = register_user(
+            &mut db.conn(),
+            "test user",
+            "password123",
+            "test@example.com",
+        )
+        .expect("Failed to register user")
+        .id;
+
+        // added 5 seconds to avoid an error (dates cannot be created int the past)
+        let start_date_val = Utc::now().naive_utc()+ chrono::Duration::seconds(5);
+        let end_date_val = start_date_val - chrono::Duration::hours(1); // Invalid: end before start
+
+        let result = create_meeting(&mut db.conn(), user_id_val, start_date_val, end_date_val);
+
+        assert!(result.is_err(), "Meeting creation should fail due to invalid dates");
+    }
+
+    #[test]
+    fn test_get_meetings_by_user() {
+        let db = TestDb::new();
+
+        let user_id_val = register_user(
+            &mut db.conn(),
+            "test user",
+            "password123",
+            "test@example.com",
+        )
+        .expect("Failed to register user")
+        .id;
+
+        let start_id_val = Utc::now().naive_utc()+ chrono::Duration::seconds(5);
+        let end_date_val = start_id_val + chrono::Duration::hours(1);
+
+        let _meeting1 = create_meeting(&mut db.conn(), user_id_val, start_id_val, end_date_val)
+            .expect("Failed to create meeting");
+
+        let _meeting2 = create_meeting(&mut db.conn(), user_id_val, start_id_val, end_date_val)
+            .expect("Failed to create meeting");
+
+        let meetings_test = get_meetings_by_user(&mut db.conn(), user_id_val)
+            .expect("Failed to fetch meetings");
+
+        assert_eq!(meetings_test.len(), 2, "User should have exactly 2 meetings");
+    }
+
+    #[test]
+    fn test_get_meeting_by_id_success() {
+        let db = TestDb::new();
+
+        let user_id_val = register_user(
+            &mut db.conn(),
+            "test user",
+            "password123",
+            "test@example.com",
+        )
+        .expect("Failed to register user")
+        .id;
+
+        let start_date_val = Utc::now().naive_utc()+ chrono::Duration::seconds(5);
+        let end_date_val = start_date_val + chrono::Duration::hours(1);
+
+        let meeting = create_meeting(&mut db.conn(), user_id_val, start_date_val, end_date_val)
+            .expect("Failed to create meeting");
+
+        let fetched_meeting = get_meeting_by_id(&mut db.conn(), meeting.id, user_id_val)
+            .expect("Failed to fetch meeting");
+
+        assert_eq!(fetched_meeting.id, meeting.id, "Fetched meeting ID does not match");
+    }
+
+    #[test]
+    fn test_update_meeting_success() {
+        let db = TestDb::new();
+
+        let user_id_val = register_user(
+            &mut db.conn(),
+            "test user",
+            "password123",
+            "test@example.com",
+        )
+        .expect("Failed to register user")
+        .id;
+
+        let start_date_val = Utc::now().naive_utc()+ chrono::Duration::seconds(5);
+        let end_date_val = start_date_val + chrono::Duration::hours(1);
+
+        let meeting = create_meeting(&mut db.conn(), user_id_val, start_date_val, end_date_val)
+            .expect("Failed to create meeting");
+
+        let new_start_date = start_date_val + chrono::Duration::days(1);
+        let new_end_date = new_start_date + chrono::Duration::hours(2);
+
+        let updated_meeting = update_meeting(
+            &mut db.conn(),
+            meeting.id,
+            user_id_val,
+            Some(new_start_date),
+            Some(new_end_date),
+        )
+        .expect("Failed to update meeting");
+
+        assert_eq!(updated_meeting.start_date, new_start_date, "Start date did not update correctly");
+        assert_eq!(updated_meeting.end_date, new_end_date, "End date did not update correctly");
+    }
+
+    #[test]
+    fn test_update_meeting_invalid_dates() {
+        let db = TestDb::new();
+
+        let user_id_val = register_user(
+            &mut db.conn(),
+            "test user",
+            "password123",
+            "test@example.com",
+        )
+        .expect("Failed to register user")
+        .id;
+
+        let start_date_val = Utc::now().naive_utc()+ chrono::Duration::seconds(5);
+        let end_date_val = start_date_val + chrono::Duration::hours(1);
+
+        let meeting = create_meeting(&mut db.conn(), user_id_val, start_date_val, end_date_val)
+            .expect("Failed to create meeting");
+
+        let new_start_date = start_date_val + chrono::Duration::days(1);
+        let new_end_date = start_date_val - chrono::Duration::hours(2); // Invalid
+
+        let result = update_meeting(
+            &mut db.conn(),
+            meeting.id,
+            user_id_val,
+            Some(new_start_date),
+            Some(new_end_date),
+        );
+
+        assert!(result.is_err(), "Update should fail with invalid dates");
+    }
+
+    #[test]
+    fn test_delete_meeting_success() {
+        let db = TestDb::new();
+
+        let user_id_val = register_user(
+            &mut db.conn(),
+            "test user",
+            "password123",
+            "test@example.com",
+        )
+        .expect("Failed to register user")
+        .id;
+
+        let start_date_val = Utc::now().naive_utc()+ chrono::Duration::seconds(5);
+        let end_date_val = start_date_val + chrono::Duration::hours(1);
+
+        let meeting = create_meeting(&mut db.conn(), user_id_val, start_date_val, end_date_val)
+            .expect("Failed to create meeting");
+
+        let delete_result = delete_meeting(&mut db.conn(), meeting.id, user_id_val);
+        assert!(delete_result.is_ok(), "Meeting deletion should succeed");
+
+        let fetched_meeting = get_meeting_by_id(&mut db.conn(), meeting.id, user_id_val);
+        assert!(fetched_meeting.is_err(), "Deleted meeting should not be retrievable");
+    }
+
+    #[test]
+    fn test_delete_meeting_wrong_user() {
+        let db = TestDb::new();
+
+        let user1_id = register_user(
+            &mut db.conn(),
+            "user1",
+            "password123",
+            "user1@example.com",
+        )
+        .expect("Failed to register user")
+        .id;
+
+        let user2_id = register_user(
+            &mut db.conn(),
+            "user2",
+            "password123",
+            "user2@example.com",
+        )
+        .expect("Failed to register user")
+        .id;
+
+        let start_date_val = Utc::now().naive_utc()+ chrono::Duration::seconds(5);
+        let end_date_val = start_date_val + chrono::Duration::hours(1);
+
+        let meeting = create_meeting(&mut db.conn(), user1_id, start_date_val, end_date_val)
+            .expect("Failed to create meeting");
+
+        let delete_result = delete_meeting(&mut db.conn(), meeting.id, user2_id);
+        assert!(delete_result.is_err(), "User2 should not be able to delete User1's meeting");
+    }
+}

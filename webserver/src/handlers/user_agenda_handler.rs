@@ -156,3 +156,256 @@ pub async fn delete_meeting(
     })?;
     Ok::<HttpResponse, ApiError>(HttpResponse::NoContent().finish())
 }
+
+
+#[cfg(test)]
+mod tests {
+    use crate::database::db;
+    use crate::database::test_db::TestDb;
+    use crate::handlers::user_agenda_handler::meeting_routes;
+    use crate::handlers::auth_handler::{auth_routes, LoginRequest};
+    use crate::services::user_service::register_user;
+    use actix_web::http::StatusCode;
+    use actix_web::{test, App};
+    use chrono::Utc;
+
+    use super::*;
+
+    #[actix_rt::test]
+async fn create_meeting_success() {
+    let db = TestDb::new();
+    let pool = db::establish_connection(&db.url());
+    dotenv::dotenv().ok();
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(pool.clone()))
+            .configure(auth_routes)
+            .configure(meeting_routes),
+    )
+    .await;
+
+    let _user = register_user(
+        &mut db.conn(),
+        "test user",
+        "testpassword",
+        "test@email.com",
+    )
+    .expect("Failed to register user");
+
+    let log_req = test::TestRequest::post()
+        .uri("/auth/login")
+        .set_json(&LoginRequest {
+            email: "test@email.com".to_string(),
+            password: "testpassword".to_string(),
+        })
+        .to_request();
+
+    let log_resp = test::call_service(&app, log_req).await;
+    assert_eq!(log_resp.status(), StatusCode::OK);
+
+    let auth_header = log_resp
+        .headers()
+        .get("Authorization")
+        .expect("No authorization header")
+        .to_str()
+        .expect("Failed to convert header to string");
+
+   
+
+        let req = test::TestRequest::post()
+        .uri("/meetings")
+        .append_header(("Authorization", auth_header))
+        .set_json(&serde_json::json!({
+            "start_date": "05-02-3025 14:30",
+            "end_date": "05-02-3025 16:30"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    
+    // Print detailed error information if the test fails
+    if resp.status() != StatusCode::CREATED {
+        let body = test::read_body(resp).await;
+        // println!("Response Status: {}", resp.status());
+        println!("Response Body: {}", String::from_utf8_lossy(&body));
+        panic!("Meeting creation failed");
+    }
+
+    assert_eq!(resp.status(), StatusCode::CREATED);
+}
+
+    #[actix_rt::test]
+    async fn test_get_meetings_success() {
+        let db = TestDb::new();
+        let pool = db::establish_connection(&db.url());
+        dotenv::dotenv().ok();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(pool.clone()))
+                .configure(auth_routes)
+                .configure(meeting_routes),
+        )
+        .await;
+
+        let user = register_user(
+            &mut db.conn(),
+            "test user",
+            "testpassword",
+            "test@email.com",
+        )
+        .expect("Failed to register user");
+
+        let _meeting_test = user_agenda_service::create_meeting(
+            &mut db.conn(),
+            user.id,
+            Utc::now().naive_utc()+ chrono::Duration::seconds(5),
+            Utc::now().naive_utc() + chrono::Duration::hours(1),
+        ).expect("Failed to create meeting");
+    
+
+        let log_req = test::TestRequest::post()
+            .uri("/auth/login")
+            .set_json(&LoginRequest {
+                email: "test@email.com".to_string(),
+                password: "testpassword".to_string(),
+            })
+            .to_request();
+
+        let log_resp = test::call_service(&app, log_req).await;
+        assert_eq!(log_resp.status(), StatusCode::OK);
+
+        let auth_header = log_resp
+            .headers()
+            .get("Authorization")
+            .expect("No authorization header")
+            .to_str()
+            .expect("Failed to convert header to string");
+
+        let req = test::TestRequest::get()
+            .uri("/meetings")
+            .append_header(("Authorization", auth_header))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn test_update_meeting_success() {
+        let db = TestDb::new();
+        let pool = db::establish_connection(&db.url());
+        dotenv::dotenv().ok();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(pool.clone()))
+                .configure(auth_routes)
+                .configure(meeting_routes),
+        )
+        .await;
+
+        let user = register_user(
+            &mut db.conn(),
+            "test user",
+            "testpassword",
+            "test@email.com",
+        )
+        .expect("Failed to register user");
+    
+        let meeting_test = user_agenda_service::create_meeting(
+            &mut db.conn(),
+            user.id,
+            Utc::now().naive_utc()+ chrono::Duration::seconds(5),
+            Utc::now().naive_utc() + chrono::Duration::hours(1),
+        ).expect("Failed to create meeting");
+    
+
+        let log_req = test::TestRequest::post()
+            .uri("/auth/login")
+            .set_json(&LoginRequest {
+                email: "test@email.com".to_string(),
+                password: "testpassword".to_string(),
+            })
+            .to_request();
+
+        let log_resp = test::call_service(&app, log_req).await;
+        assert_eq!(log_resp.status(), StatusCode::OK);
+
+        let auth_header = log_resp
+            .headers()
+            .get("Authorization")
+            .expect("No authorization header")
+            .to_str()
+            .expect("Failed to convert header to string");
+
+        let req = test::TestRequest::patch()
+            .uri(&format!("/meetings/{}", meeting_test.id))
+            .append_header(("Authorization", auth_header))
+            .set_json(&serde_json::json!({
+                "start_date": "05-02-3025 14:30",
+                "end_date": "05-02-3025 16:30"
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn test_delete_meeting_success() {
+        let db = TestDb::new();
+        let pool = db::establish_connection(&db.url());
+        dotenv::dotenv().ok();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(pool.clone()))
+                .configure(auth_routes)
+                .configure(meeting_routes),
+        )
+        .await;
+    let user = register_user(
+        &mut db.conn(),
+        "test user",
+        "testpassword",
+        "test@email.com",
+    )
+    .expect("Failed to register user");
+
+    let meeting_test = user_agenda_service::create_meeting(
+        &mut db.conn(),
+        user.id,
+        Utc::now().naive_utc()+ chrono::Duration::seconds(5),
+        Utc::now().naive_utc() + chrono::Duration::hours(1),
+    ).expect("Failed to create meeting");
+
+        let log_req = test::TestRequest::post()
+            .uri("/auth/login")
+            .set_json(&LoginRequest {
+                email: "test@email.com".to_string(),
+                password: "testpassword".to_string(),
+            })
+            .to_request();
+
+        let log_resp = test::call_service(&app, log_req).await;
+        assert_eq!(log_resp.status(), StatusCode::OK);
+
+        let auth_header = log_resp
+            .headers()
+            .get("Authorization")
+            .expect("No authorization header")
+            .to_str()
+            .expect("Failed to convert header to string");
+
+        let delete_req = test::TestRequest::delete()
+            .uri(&format!("/meetings/{}", meeting_test.id))
+            .append_header(("Authorization", auth_header))
+            .to_request();
+
+        let delete_resp = test::call_service(&app, delete_req).await;
+        assert_eq!(delete_resp.status(), StatusCode::NO_CONTENT);
+    }
+    
+}

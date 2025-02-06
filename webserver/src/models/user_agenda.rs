@@ -66,9 +66,9 @@ pub enum MeetingsError {
 impl From<MeetingsError> for DatabaseError {
     fn from(err: MeetingsError) -> Self {
         match err {
-            MeetingsError::InvalidStartDate => DatabaseError::DateValidationError(ValidationError{ message: ("Start date cannot be in the past".to_owned())}),
-            MeetingsError::InvalidEndDate => DatabaseError::DateValidationError(ValidationError {message:("End date cannot be in the past".to_owned())}),
-            MeetingsError::InvalidDateRange => DatabaseError::DateValidationError(ValidationError{message:("End date must be after start date".to_owned())}),
+            MeetingsError::InvalidStartDate => DatabaseError::DataValidationError(ValidationError{ message: ("Start date cannot be in the past".to_owned())}),
+            MeetingsError::InvalidEndDate => DatabaseError::DataValidationError(ValidationError {message:("End date cannot be in the past".to_owned())}),
+            MeetingsError::InvalidDateRange => DatabaseError::DataValidationError(ValidationError{message:("End date must be after start date".to_owned())}),
         }
     }
 }

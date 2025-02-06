@@ -16,7 +16,7 @@ pub enum DatabaseError {
     #[error("Diesel error occurred")]
     DieselError(#[from] DieselError),
     #[error("Error occurred: {0}")]
-    DateValidationError(#[from] ValidationError),
+    DataValidationError(#[from] ValidationError),
     #[error("Permission Denied")]
     PermissionDenied,
     #[error("Resource not found")]
@@ -29,7 +29,7 @@ impl ResponseError for DatabaseError {
             DatabaseError::GenericError => StatusCode::INTERNAL_SERVER_ERROR,
 
             DatabaseError::ConnectionError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            DatabaseError::DateValidationError(_) => StatusCode::BAD_REQUEST,
+            DatabaseError::DataValidationError(_) => StatusCode::BAD_REQUEST,
             DatabaseError::PermissionDenied=> StatusCode::UNAUTHORIZED,
             DatabaseError::NotFound => StatusCode::NOT_FOUND,
             DatabaseError::DieselError(ref err) => match &err {
