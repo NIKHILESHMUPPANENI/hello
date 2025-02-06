@@ -5,7 +5,7 @@ use diesel::result::Error as DieselError;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
-use crate::tasks::task_error::TaskError;
+use crate::tasks::error::ValidationError;
 
 #[derive(Error, Debug)]
 pub enum DatabaseError {
@@ -16,7 +16,7 @@ pub enum DatabaseError {
     #[error("Diesel error occurred")]
     DieselError(#[from] DieselError),
     #[error("Error occurred: {0}")]
-    DateValidationError(#[from] TaskError),
+    DateValidationError(#[from] ValidationError),
     #[error("Permission Denied")]
     PermissionDenied,
     #[error("Resource not found")]

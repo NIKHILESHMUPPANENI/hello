@@ -2,7 +2,7 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
 
-use chrono::{self, NaiveDateTime};
+use chrono::{self, DateTime, NaiveDateTime, Utc};
 
 use crate::models::project::Project;
 use crate::models::user::User;
@@ -29,6 +29,7 @@ pub struct Task {
     pub progress:Progress,
     pub priority : Priority,
     pub created_at:NaiveDateTime,
+    // pub created_at:DateTime<Utc>,
     pub due_date: Option<NaiveDateTime>
 }
 
@@ -92,7 +93,6 @@ impl Task {
         }
     }
 }
-
 
 
 

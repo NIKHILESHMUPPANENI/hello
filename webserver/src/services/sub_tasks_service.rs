@@ -3,28 +3,26 @@ use diesel::prelude::*;
 use diesel::result::Error;
 
 
-use crate::{ database::error::DatabaseError, models::{sub_tasks::{NewSubTask, SubTask}, sub_tasks_assignee::{NewSubTaskAssignee, SubTaskWithAssignedUsers, SubTaskWithAssignees}, task::Task, user::User}, schema::{sub_tasks::{self}, subtask_assignees::{self}, tasks::{self}}, tasks::herlpers::{validate_task_ownership, validate_user_project_access}};
+use crate::{ database::error::DatabaseError, models::{sub_tasks::{NewSubTask, SubTask}, sub_tasks_assignee::{NewSubTaskAssignee, SubTaskWithAssignedUsers, SubTaskWithAssignees}, task::Task, user::User}, schema::{sub_tasks::{self}, subtask_assignees::{self}, tasks::{self}}, tasks::helpers::{validate_task_ownership, validate_user_project_access}};
 
-use crate::tasks::{enums::{Priority, Progress}, herlpers::{parse_and_validate_created_at, parse_and_validate_due_date}, task_error::TaskError};
+use crate::tasks::{enums::{Priority, Progress}, helpers::parse_and_validate_due_date, error::ValidationError};
 
 pub fn create_subtask(
     conn: &mut PgConnection,
     task_id: i32,
     title: &str,
     description: &str,
-    created_at:Option<String>,
     due_date: Option<String>,
     priority: Priority,
     progress: Progress,
     user_id: i32,
     assignee_user: Option<Vec<i32>>,
-) -> Result<SubTask, TaskError> {
+) -> Result<SubTask, ValidationError> {
     // Validate parent task exists
     tasks::table
         .find(task_id)
         .first::<Task>(conn)
-        .map_err(|_| TaskError {
-            message: format!("Task with id {} not found", task_id),
+        .map_err(|_| DatabaseError::NotFound {
         })?;
 
         // Ensure the user has access to the project & tasks
@@ -32,15 +30,14 @@ pub fn create_subtask(
         let _user_project = validate_user_project_access(conn, user_id, task.project_id)?;
 
     // Parse due date
-    let parsed_due_date = parse_and_validate_due_date(due_date)?;
-    let parsed_created_at = parse_and_validate_created_at(created_at)?;
+    let parsed_due_date = parse_and_validate_due_date(due_date,None)?;
 
     // Insert new subtask
     let new_subtask = NewSubTask {
         task_id,
         title,
         description,
-        created_at: parsed_created_at,
+        created_at: chrono::Utc::now().naive_utc(),
         updated_at: chrono::Utc::now().naive_utc(),
         due_date: parsed_due_date,
         priority,
@@ -130,22 +127,15 @@ pub fn update_subtask(
     completed: Option<bool>,
     progress: Option<Progress>,
     priority: Option<Priority>,
-    created_at: Option<String>,
     due_date: Option<String>,
     assigned_users: Option<Vec<i32>>,
-) -> Result<SubTaskWithAssignedUsers, TaskError> {
+) -> Result<SubTaskWithAssignedUsers, ValidationError> {
     use crate::schema::{sub_tasks, subtask_assignees};
 
     // Ensure the user has access to the project & tasks
     let _task = validate_task_ownership(conn, task_id, user_id);
 
-    // Validate dates only if `created_at` or `due_date` is provided
-    let parsed_created_at = if let Some(date) = &created_at {
-        Some(parse_and_validate_created_at(Some(date.clone()))?)
-    } else {
-        None
-    };
-    let parsed_due_date = parse_and_validate_due_date(due_date)?;
+    let parsed_due_date = parse_and_validate_due_date(due_date,None)?;
 
     conn.transaction(|conn| {
         // Validate that the subtask belongs to the correct task and user
@@ -156,7 +146,7 @@ pub fn update_subtask(
                     .and(sub_tasks::user_id.eq(user_id)),
             )
             .first::<SubTask>(conn)
-            .map_err(|_| TaskError {
+            .map_err(|_| ValidationError {
                 message: "Subtask not found or unauthorized".to_string(),
             })?;
 
@@ -174,7 +164,6 @@ pub fn update_subtask(
             progress.map(|prog| sub_tasks::progress.eq(prog)),
             priority.map(|pri| sub_tasks::priority.eq(pri)),
             Some(sub_tasks::updated_at.eq(chrono::Utc::now().naive_utc())), 
-            parsed_created_at.map(|dt| sub_tasks::created_at.eq(dt)), 
             parsed_due_date.map(|dt| sub_tasks::due_date.eq(dt)),
         ))
         .get_result::<SubTask>(conn)?;
@@ -283,7 +272,6 @@ fn create_subtask_success() {
         project.id,
         user.id,
         "task title",
-        Some("01-01-2025".to_string()),
         None,
     )
     .expect("Failed to create task");
@@ -293,7 +281,6 @@ fn create_subtask_success() {
         task.id,
         "subtask title",
         "subtask description",
-        Some("01-01-2025".to_string()),
         None,
         Priority::Medium,
         Progress::ToDo,
@@ -318,7 +305,6 @@ fn create_subtask_invalid_task_id() {
         999, // Non-existent task ID
         "subtask title",
         "subtask description",
-        Some("01-01-2025".to_string()),
         None,
         Priority::Medium,
         Progress::ToDo,
@@ -347,7 +333,6 @@ fn get_sub_tasks_success() {
         project.id,
         user.id,
         "task title",
-        Some("01-01-2025".to_string()),
         None,
     )
     .expect("Failed to create task");
@@ -357,7 +342,6 @@ fn get_sub_tasks_success() {
         task.id,
         "subtask title",
         "subtask description",
-        Some("01-01-2025".to_string()),
         None,
         Priority::Medium,
         Progress::ToDo,
@@ -386,7 +370,6 @@ fn get_sub_tasks_with_assignees_success() {
         project.id,
         user.id,
         "task title",
-        Some("01-01-2025".to_string()),
         None,
     )
     .expect("Failed to create task");
@@ -396,7 +379,6 @@ fn get_sub_tasks_with_assignees_success() {
         task.id,
         "subtask title",
         "subtask description",
-        Some("01-01-2025".to_string()),
         None,
         Priority::Medium,
         Progress::ToDo,
@@ -420,7 +402,6 @@ mod tests {
     use super::*;
     use crate::database::test_db::TestDb;
     use crate::services::{project_service, sub_tasks_service, task_service, user_service};
-    use chrono::Utc;
 
     #[test]
     fn test_update_subtask_success() {
@@ -453,7 +434,6 @@ mod tests {
             project.id,
             user.id,
             "task title",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
         )
         .expect("Failed to create task");
@@ -464,7 +444,6 @@ mod tests {
             task.id,
             "initial subtask",
             "initial subtask description",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
             Priority::Medium,
             Progress::ToDo,
@@ -484,7 +463,6 @@ mod tests {
             Some(true),
             Some(Progress::InProgress),
             Some(Priority::High),
-            None,
             None,
             Some(vec![user.id]),
         )
@@ -536,7 +514,6 @@ mod tests {
             project.id,
             user1.id,
             "task title",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
         )
         .expect("Failed to create task");
@@ -547,7 +524,6 @@ mod tests {
             task.id,
             "initial subtask",
             "initial subtask description",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
             Priority::Medium,
             Progress::ToDo,
@@ -563,7 +539,6 @@ mod tests {
             task.id,
             user2.id,
             Some("Updated Subtask"),
-            None,
             None,
             None,
             None,
@@ -606,7 +581,6 @@ mod tests {
             project.id,
             user.id,
             "task title",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
         )
         .expect("Failed to create task");
@@ -617,7 +591,6 @@ mod tests {
             task.id,
             "subtask",
             "subtask description",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
             Priority::Medium,
             Progress::ToDo,
@@ -676,7 +649,6 @@ mod tests {
             project.id,
             user1.id,
             "task title",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
         )
         .expect("Failed to create task");
@@ -687,7 +659,6 @@ mod tests {
             task.id,
             "subtask",
             "subtask description",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
             Priority::Medium,
             Progress::ToDo,
@@ -747,7 +718,6 @@ mod tests {
             project1.id,
             user.id,
             "task title 1",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
         )
         .expect("Failed to create task");
@@ -759,7 +729,6 @@ mod tests {
             project2.id,
             user.id,
             "task title 2",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
         )
         .expect("Failed to create task");
@@ -770,7 +739,6 @@ mod tests {
             task1.id,
             "subtask",
             "subtask description",
-            Some(Utc::now().format("%d-%m-%Y").to_string()),
             None,
             Priority::Medium,
             Progress::ToDo,

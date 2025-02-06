@@ -4,7 +4,7 @@ use diesel::{Queryable, Selectable, Insertable, Associations, Identifiable};
 use crate::database::error::DatabaseError;
 use crate::schema::meetings;
 use crate::models::user::User;
-use crate::tasks::task_error::TaskError;
+use crate::tasks::error::ValidationError;
 
 #[derive(Queryable, Selectable, Serialize, Deserialize, Debug, Associations, Identifiable, PartialEq)]
 #[diesel(table_name = meetings)]
@@ -66,9 +66,9 @@ pub enum MeetingsError {
 impl From<MeetingsError> for DatabaseError {
     fn from(err: MeetingsError) -> Self {
         match err {
-            MeetingsError::InvalidStartDate => DatabaseError::DateValidationError(TaskError{ message: ("Start date cannot be in the past".to_owned())}),
-            MeetingsError::InvalidEndDate => DatabaseError::DateValidationError(TaskError {message:("End date cannot be in the past".to_owned())}),
-            MeetingsError::InvalidDateRange => DatabaseError::DateValidationError(TaskError{message:("End date must be after start date".to_owned())}),
+            MeetingsError::InvalidStartDate => DatabaseError::DateValidationError(ValidationError{ message: ("Start date cannot be in the past".to_owned())}),
+            MeetingsError::InvalidEndDate => DatabaseError::DateValidationError(ValidationError {message:("End date cannot be in the past".to_owned())}),
+            MeetingsError::InvalidDateRange => DatabaseError::DateValidationError(ValidationError{message:("End date must be after start date".to_owned())}),
         }
     }
 }

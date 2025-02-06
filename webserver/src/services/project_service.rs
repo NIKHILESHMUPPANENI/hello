@@ -144,7 +144,6 @@ mod tests {
 
         let title = "Test Project";
         let description = "Test Project Description";
-        let created_at = Some(Utc::now().format("%d-%m-%Y").to_string());
         let due_date = Some("25-12-3000".to_string());
 
         let user_id = register_user(&mut conn, "testuser", "password123", "test@example.com")
@@ -159,8 +158,8 @@ mod tests {
         assert_eq!(project_new.id, project_id);
         assert_eq!(tasks_new.len(), 0);
 
-        let task_1 = create_task(&mut conn, "test task 1", 100, project_id,user_id,title,created_at.clone(),due_date.clone());
-        let task_2 = create_task(&mut conn, "test task 2", 200, project_id,user_id,title,created_at.clone(),due_date.clone());
+        let task_1 = create_task(&mut conn, "test task 1", 100, project_id,user_id,title,due_date.clone());
+        let task_2 = create_task(&mut conn, "test task 2", 200, project_id,user_id,title,due_date.clone());
 
         let (project, tasks) =
             get_project_with_tasks(&mut conn, &project_id).expect("Failed to get project");
