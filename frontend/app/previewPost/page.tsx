@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { getLinkedInToken, getLinkedInUserInfo, shareLinkedInPost } from "../components/outsource/utils/api";
 import { Navbar } from "../components";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -107,13 +108,40 @@ const PreviewPost = () => {
     }
   };
 
-  const handlePostToLinkedIn = () => {
-    // Clear all stored data after successful post
-    localStorage.removeItem('formData');
-    localStorage.removeItem('previewData');
-    localStorage.removeItem('tempLogoData');
-    localStorage.removeItem('editorContent');
-    // Add your LinkedIn posting logic here
+  const handlePostToLinkedIn = async () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      let code = urlParams.get("code");
+  
+      if (!code) {
+        startLinkedInAuth(); // Redirect user to LinkedIn OAuth
+        return;
+      }
+  
+      // Exchange authorization code for access token
+      const tokenResponse = await getLinkedInToken(code);
+      if (!tokenResponse?.access_token) {
+        alert("Failed to authenticate with LinkedIn");
+        return;
+      }
+  
+      // Post to LinkedIn
+      const postText = previewData.jobDescription;
+      const visibility = "PUBLIC"; // Change this if needed
+      const postResponse = await shareLinkedInPost(code, postText, visibility);
+  
+      if (postResponse) {
+        alert("Successfully posted to LinkedIn!");
+        localStorage.removeItem("formData");
+        localStorage.removeItem("previewData");
+        localStorage.removeItem("tempLogoData");
+        localStorage.removeItem("editorContent");
+      } else {
+        alert("Failed to post on LinkedIn");
+      }
+    } catch (error) {
+      console.error("Error posting to LinkedIn:", error);
+    }
   };
 
   return (

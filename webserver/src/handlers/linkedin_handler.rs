@@ -44,6 +44,25 @@ pub async fn start_linkedin_authentication()-> Result<impl Responder, impl Respo
     )
 }
 
+// #[get("/auth")]
+// pub async fn start_linkedin_authentication() -> impl Responder {
+//     let client_id = env::var("LINKEDIN_CLIENT_ID").expect("LINKEDIN_CLIENT_ID must be set");
+//     let root_url = env::var("BASE_URL").expect("BASE_URL must be set");
+
+//     let redirect_url = format!("{}/linkedin-callback", root_url);
+//     let state = "random_csrf_token";
+
+//     let auth_url = format!(
+//         "https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id={}&redirect_uri={}&scope=profile%20openid%20w_member_social&state={}",
+//         client_id, redirect_url, state
+//     );
+
+//     HttpResponse::Found()
+//         .append_header(("Location", auth_url))
+//         .finish()
+// }
+
+
 #[post("/callback")]
 async fn handle_linkedin_callback(
     share_request: web::Json<SharePost>,
@@ -81,6 +100,33 @@ async fn handle_linkedin_callback(
 
     Ok::<HttpResponse, ReqError>(HttpResponse::Ok().json(post_response))
 }
+
+// #[post("/callback")]
+// async fn handle_linkedin_callback(
+//     share_request: web::Json<SharePost>,
+// ) -> impl Responder {
+//     let code = share_request.code.clone();
+
+//     // Exchange code for access token
+//     let token_response = get_token(code).map_err(|_| HttpResponse::InternalServerError().json("Failed to get token"))?;
+//     let token_json: AccessTokenResponse = token_response.json().map_err(|_| HttpResponse::InternalServerError().json("Invalid token response"))?;
+    
+//     let access_token = token_json.access_token.clone();
+
+//     // Fetch LinkedIn user info
+//     let user_info_response = get_linkedin_user_info(access_token.clone()).map_err(|_| HttpResponse::InternalServerError().json("Failed to fetch LinkedIn user info"))?;
+//     let user_info: UserInfo = user_info_response.json().map_err(|_| HttpResponse::InternalServerError().json("Invalid user info response"))?;
+
+//     // Share post
+//     let post_response = share_linkedin_post(
+//         access_token.clone(),
+//         user_info.sub.clone(),
+//         share_request.text.clone()
+//     ).map_err(|_| HttpResponse::InternalServerError().json("Failed to post on LinkedIn"))?;
+
+//     HttpResponse::Ok().json(post_response.json().unwrap_or_else(|_| serde_json::json!({"message": "Post successful"})))
+// }
+
 
 pub fn linkedin_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
