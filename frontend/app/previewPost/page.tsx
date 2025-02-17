@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { getLinkedInToken, getLinkedInUserInfo, shareLinkedInPost } from "../components/outsource/utils/api";
+import {
+  startLinkedInAuth, 
+  getLinkedInToken, 
+  shareLinkedInPost 
+} from "../components/outsource/utils/api";
 import { Navbar } from "../components";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -108,41 +112,50 @@ const PreviewPost = () => {
     }
   };
 
-  const handlePostToLinkedIn = async () => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      let code = urlParams.get("code");
-  
-      if (!code) {
-        startLinkedInAuth(); // Redirect user to LinkedIn OAuth
-        return;
-      }
-  
-      // Exchange authorization code for access token
-      const tokenResponse = await getLinkedInToken(code);
-      if (!tokenResponse?.access_token) {
-        alert("Failed to authenticate with LinkedIn");
-        return;
-      }
-  
-      // Post to LinkedIn
-      const postText = previewData.jobDescription;
-      const visibility = "PUBLIC"; // Change this if needed
-      const postResponse = await shareLinkedInPost(code, postText, visibility);
-  
-      if (postResponse) {
-        alert("Successfully posted to LinkedIn!");
-        localStorage.removeItem("formData");
-        localStorage.removeItem("previewData");
-        localStorage.removeItem("tempLogoData");
-        localStorage.removeItem("editorContent");
-      } else {
-        alert("Failed to post on LinkedIn");
-      }
-    } catch (error) {
-      console.error("Error posting to LinkedIn:", error);
+  // frontend/app/previewPost/page.tsx
+
+const handlePostToLinkedIn = async () => {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    let code = urlParams.get("code");
+
+    if (!code) {
+      startLinkedInAuth(); // This will redirect to LinkedIn auth
+      return;
     }
-  };
+
+    // First get the token
+    const tokenResponse = await getLinkedInToken(code);
+    if (!tokenResponse) {
+      alert("Failed to authenticate with LinkedIn");
+      return;
+    }
+
+    // Then share the post
+    const postResponse = await shareLinkedInPost(
+      code,
+      previewData.jobDescription,
+      "PUBLIC"
+    );
+
+    if (postResponse) {
+      alert("Successfully posted to LinkedIn!");
+      // Clear stored data
+      localStorage.removeItem("formData");
+      localStorage.removeItem("previewData");
+      localStorage.removeItem("tempLogoData");
+      localStorage.removeItem("editorContent");
+      
+      // Optionally redirect
+      router.push("/");
+    } else {
+      alert("Failed to post on LinkedIn");
+    }
+  } catch (error) {
+    console.error("Error posting to LinkedIn:", error);
+    alert("Error posting to LinkedIn. Please try again.");
+  }
+};
 
   return (
     <div className="w-full min-h-screen bg-gray-100">
@@ -342,4 +355,3 @@ const PreviewPost = () => {
   );
 };
 
-export default PreviewPost;
