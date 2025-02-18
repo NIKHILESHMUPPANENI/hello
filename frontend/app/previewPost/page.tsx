@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
-  startLinkedInAuth, 
-  getLinkedInToken, 
-  shareLinkedInPost 
+  startLinkedInAuth,
+  getLinkedInToken,
+  shareLinkedInPost
 } from "../components/outsource/utils/api";
 import { Navbar } from "../components";
 import Image from "next/image";
@@ -99,12 +99,12 @@ const PreviewPost = () => {
         jobDescription: previewData.jobDescription,
         mediaContent: previewData.mediaContent
       }));
-  
+
       // Store logo separately
       if (logoUrl) {
         localStorage.setItem('editLogoData', logoUrl);
       }
-  
+
       // Use router to navigate back
       router.push('/post-task');
     } catch (error) {
@@ -114,48 +114,48 @@ const PreviewPost = () => {
 
   // frontend/app/previewPost/page.tsx
 
-const handlePostToLinkedIn = async () => {
-  try {
-    const urlParams = new URLSearchParams(window.location.search);
-    let code = urlParams.get("code");
+  const handlePostToLinkedIn = async () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      let code = urlParams.get("code");
 
-    if (!code) {
-      startLinkedInAuth(); // This will redirect to LinkedIn auth
-      return;
+      if (!code) {
+        startLinkedInAuth(); // This will redirect to LinkedIn auth
+        return;
+      }
+
+      // First get the token
+      const tokenResponse = await getLinkedInToken(code);
+      if (!tokenResponse) {
+        alert("Failed to authenticate with LinkedIn");
+        return;
+      }
+
+      // Then share the post
+      const postResponse = await shareLinkedInPost(
+        code,
+        previewData.jobDescription,
+        "PUBLIC"
+      );
+
+      if (postResponse) {
+        alert("Successfully posted to LinkedIn!");
+        // Clear stored data
+        localStorage.removeItem("formData");
+        localStorage.removeItem("previewData");
+        localStorage.removeItem("tempLogoData");
+        localStorage.removeItem("editorContent");
+
+        // Optionally redirect
+        router.push("/");
+      } else {
+        alert("Failed to post on LinkedIn");
+      }
+    } catch (error) {
+      console.error("Error posting to LinkedIn:", error);
+      alert("Error posting to LinkedIn. Please try again.");
     }
-
-    // First get the token
-    const tokenResponse = await getLinkedInToken(code);
-    if (!tokenResponse) {
-      alert("Failed to authenticate with LinkedIn");
-      return;
-    }
-
-    // Then share the post
-    const postResponse = await shareLinkedInPost(
-      code,
-      previewData.jobDescription,
-      "PUBLIC"
-    );
-
-    if (postResponse) {
-      alert("Successfully posted to LinkedIn!");
-      // Clear stored data
-      localStorage.removeItem("formData");
-      localStorage.removeItem("previewData");
-      localStorage.removeItem("tempLogoData");
-      localStorage.removeItem("editorContent");
-      
-      // Optionally redirect
-      router.push("/");
-    } else {
-      alert("Failed to post on LinkedIn");
-    }
-  } catch (error) {
-    console.error("Error posting to LinkedIn:", error);
-    alert("Error posting to LinkedIn. Please try again.");
-  }
-};
+  };
 
   return (
     <div className="w-full min-h-screen bg-gray-100">
@@ -247,7 +247,7 @@ const handlePostToLinkedIn = async () => {
         {/* Post Visibility Options */}
         <div className="mb-8 p-6 border rounded-xl bg-gray-50">
           <h2 className="text-xl font-semibold mb-4">Sharing Options</h2>
-          
+
           <div className="space-y-4">
             {/* LinkedIn sharing options */}
             <div className="flex flex-col gap-3 mb-6">
@@ -260,7 +260,7 @@ const handlePostToLinkedIn = async () => {
                 <span className="text-gray-700">Share on FlowerWork's LinkedIn account</span>
               </label>
             </div>
-        
+
             {/* Visibility dropdown */}
             <div className="space-y-2">
               <h3 className="text-lg font-medium text-gray-700">Post Visibility</h3>
@@ -355,3 +355,4 @@ const handlePostToLinkedIn = async () => {
   );
 };
 
+export default PreviewPost;
