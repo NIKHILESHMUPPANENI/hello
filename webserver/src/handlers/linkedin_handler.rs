@@ -44,7 +44,6 @@ pub async fn start_linkedin_authentication()-> Result<impl Responder, impl Respo
     )
 }
 
-
 #[post("/callback")]
 async fn handle_linkedin_callback(
     share_request: web::Json<SharePost>,
@@ -82,8 +81,6 @@ async fn handle_linkedin_callback(
 
     Ok::<HttpResponse, ReqError>(HttpResponse::Ok().json(post_response))
 }
-
-
 
 pub fn linkedin_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
